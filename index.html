@@ -92,6 +92,14 @@
         const db = firebase.firestore();
         const { Timestamp } = firebase.firestore;
 
+        // --- UTILITY FUNCTIONS ---
+        const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN').format(amount);
+        const formatDate = (date) => {
+            if (!date) return 'N/A';
+            const jsDate = date.toDate ? date.toDate() : new Date(date);
+            return jsDate.toLocaleDateString('vi-VN');
+        };
+
         // --- CHILD COMPONENTS ---
 
         const LoginScreen = ({ onLogin }) => {
@@ -178,12 +186,6 @@
                 return data.filter(bed => bed.buildingName === activeBuilding?.name);
             }, [activeTab, data, isBedList, buildings]);
             
-            const formatDate = (date) => {
-                if (!date) return 'N/A';
-                const jsDate = date.toDate ? date.toDate() : date;
-                return jsDate.toLocaleDateString('vi-VN');
-            };
-
             return (
                 <div className={`fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity duration-300 ${show ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose}>
                     <div className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl transform transition-transform duration-300 ease-out ${show ? 'translate-y-0' : 'translate-y-full'}`} onClick={(e) => e.stopPropagation()}>
@@ -283,7 +285,7 @@
                             <div className="bg-white p-6 rounded-lg shadow">
                                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Cần Thu</h2>
                                 <ul className="space-y-3 max-h-96 overflow-y-auto">
-                                    {payments.filter(p => p.status === 'unpaid').map(p => { const tenantInfo = tenants.find(t => t.id === p.tenantId); return (<li key={p.id} className="p-3 bg-yellow-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-lg text-yellow-800 font-semibold">{new Intl.NumberFormat('vi-VN').format(p.amount)} VNĐ</p><button onClick={() => onUpdatePaymentStatus(p.id, 'paid')} className="mt-2 w-full btn-primary bg-green-500 hover:bg-green-700">Xác Nhận Đã Thanh Toán</button></li>); })}
+                                    {payments.filter(p => p.status === 'unpaid').map(p => { const tenantInfo = tenants.find(t => t.id === p.tenantId); return (<li key={p.id} className="p-3 bg-yellow-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-lg text-yellow-800 font-semibold">{formatCurrency(p.amount)} VNĐ</p><button onClick={() => onUpdatePaymentStatus(p.id, 'paid')} className="mt-2 w-full btn-primary bg-green-500 hover:bg-green-700">Xác Nhận Đã Thanh Toán</button></li>); })}
                                     {payments.filter(p => p.status === 'unpaid').length === 0 && <p className="text-gray-500">Không có khoản thu nào.</p>}
                                 </ul>
                             </div>
@@ -400,6 +402,119 @@
                             )}
                         </div>
                     ))}
+                </div>
+            );
+        };
+
+        const FinanceManagement = ({ buildingsData, expensesData, paymentsData, tenantsData, onAddExpense, onDeleteExpense }) => {
+            const [newExpense, setNewExpense] = useState({ description: '', amount: '', buildingId: '', date: new Date().toISOString().slice(0, 10) });
+
+            const handleAddExpense = (e) => {
+                e.preventDefault();
+                if (!newExpense.description || !newExpense.amount || !newExpense.buildingId || !newExpense.date) {
+                    alert("Vui lòng điền đầy đủ thông tin.");
+                    return;
+                }
+                onAddExpense({
+                    ...newExpense,
+                    amount: parseInt(newExpense.amount, 10),
+                    date: Timestamp.fromDate(new Date(newExpense.date))
+                });
+                setNewExpense({ description: '', amount: '', buildingId: '', date: new Date().toISOString().slice(0, 10) });
+            };
+
+            const financialSummary = useMemo(() => {
+                const totalRevenue = paymentsData.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+                const totalExpense = expensesData.reduce((sum, e) => sum + e.amount, 0);
+                return { totalRevenue, totalExpense };
+            }, [paymentsData, expensesData]);
+            
+            const transactions = useMemo(() => {
+                const combined = [
+                    ...paymentsData.filter(p => p.status === 'paid').map(p => ({ ...p, type: 'revenue', date: p.dueDate || p.startDate })),
+                    ...expensesData.map(e => ({...e, type: 'expense'}))
+                ];
+                return combined.sort((a, b) => b.date.toDate() - a.date.toDate());
+            }, [paymentsData, expensesData]);
+
+
+            return (
+                <div className="p-4 md:p-8 space-y-8">
+                    <h2 className="text-2xl font-bold text-gray-800">Quản Lý Tài Chính</h2>
+                    
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="p-6 rounded-lg shadow-lg text-white bg-green-500">
+                            <p className="text-lg font-semibold">Tổng Doanh Thu</p>
+                            <p className="text-4xl font-bold">{formatCurrency(financialSummary.totalRevenue)} VNĐ</p>
+                            <p className="text-sm opacity-80">Từ các khoản đã thanh toán</p>
+                        </div>
+                        <div className="p-6 rounded-lg shadow-lg text-white bg-red-500">
+                            <p className="text-lg font-semibold">Tổng Chi Phí</p>
+                            <p className="text-4xl font-bold">{formatCurrency(financialSummary.totalExpense)} VNĐ</p>
+                            <p className="text-sm opacity-80">Các chi phí vận hành</p>
+                        </div>
+                        <div className="p-6 rounded-lg shadow-lg text-white bg-blue-500">
+                            <p className="text-lg font-semibold">Lợi Nhuận Ước Tính</p>
+                            <p className="text-4xl font-bold">{formatCurrency(financialSummary.totalRevenue - financialSummary.totalExpense)} VNĐ</p>
+                            <p className="text-sm opacity-80">Doanh thu - Chi phí</p>
+                        </div>
+                    </div>
+
+                    {/* Add Expense Form */}
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-xl font-semibold mb-4">Thêm Chi Phí Mới</h3>
+                        <form onSubmit={handleAddExpense} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700">Nội dung chi</label>
+                                <input type="text" value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} placeholder="VD: Tiền điện tháng 7" className="input-form mt-1" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Số tiền (VNĐ)</label>
+                                <input type="number" value={newExpense.amount} onChange={e => setNewExpense({...newExpense, amount: e.target.value})} placeholder="2000000" className="input-form mt-1" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Ngày chi</label>
+                                <input type="date" value={newExpense.date} onChange={e => setNewExpense({...newExpense, date: e.target.value})} className="input-form mt-1" required />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700">Cho tòa nhà</label>
+                                <select value={newExpense.buildingId} onChange={e => setNewExpense({...newExpense, buildingId: e.target.value})} className="input-form mt-1" required>
+                                    <option value="">-- Chọn tòa nhà --</option>
+                                    {buildingsData.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <button type="submit" className="btn-primary w-full">Thêm Chi Phí</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Transactions List */}
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-xl font-semibold mb-4">Lịch Sử Giao Dịch</h3>
+                        <div className="max-h-96 overflow-y-auto">
+                            <ul className="space-y-2">
+                                {transactions.map(item => (
+                                    <li key={item.id} className={`group p-3 rounded-lg flex justify-between items-center ${item.type === 'revenue' ? 'bg-green-50' : 'bg-red-50'}`}>
+                                        <div>
+                                            <p className="font-bold">{item.type === 'revenue' ? `Thu từ ${tenantsData.find(t => t.id === item.tenantId)?.name || 'N/A'}` : item.description}</p>
+                                            <p className="text-sm text-gray-500">{formatDate(item.date)} - {item.type === 'expense' ? `Nhà: ${buildingsData.find(b => b.id === item.buildingId)?.name || 'N/A'}` : `Phòng: ${item.roomName}`}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={`font-semibold ${item.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {item.type === 'revenue' ? '+' : '-'} {formatCurrency(item.amount)} VNĐ
+                                            </p>
+                                            {item.type === 'expense' && (
+                                                <button onClick={() => onDeleteExpense(item.id)} className="text-xs text-gray-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">Xóa</button>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                                {transactions.length === 0 && <p className="text-gray-500 text-center py-4">Chưa có giao dịch nào.</p>}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -532,11 +647,71 @@
                             </div>
                             <div className="bg-white p-6 rounded-lg shadow">
                                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Đã Thanh Toán</h2>
-                                <ul className="space-y-3 max-h-80 overflow-y-auto">{paymentsData.filter(p => p.status === 'paid').map(p => { const tenantInfo = tenantsData.find(t => t.id === p.tenantId); return (<li key={p.id} className="group p-3 bg-green-100 rounded-lg opacity-70 flex justify-between items-center"><div className="flex-grow"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-md text-green-800 font-semibold">{new Intl.NumberFormat('vi-VN').format(p.amount)} VNĐ</p></div><button onClick={() => onDeletePayment(p.id)} className="hidden group-hover:block text-sm text-red-600 hover:text-red-800 ml-2">Xóa</button></li>);})}{paymentsData.filter(p => p.status === 'paid').length === 0 && <p className="text-gray-500">Chưa có thanh toán nào.</p>}</ul>
+                                <ul className="space-y-3 max-h-80 overflow-y-auto">{paymentsData.filter(p => p.status === 'paid').map(p => { const tenantInfo = tenantsData.find(t => t.id === p.tenantId); return (<li key={p.id} className="group p-3 bg-green-100 rounded-lg opacity-70 flex justify-between items-center"><div className="flex-grow"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-md text-green-800 font-semibold">{formatCurrency(p.amount)} VNĐ</p></div><button onClick={() => onDeletePayment(p.id)} className="hidden group-hover:block text-sm text-red-600 hover:text-red-800 ml-2">Xóa</button></li>);})}{paymentsData.filter(p => p.status === 'paid').length === 0 && <p className="text-gray-500">Chưa có thanh toán nào.</p>}</ul>
                             </div>
                         </div>
                     </div>
                 </div>
+            );
+        };
+
+        const Sidebar = ({ isOpen, view, setView, onClose }) => {
+            const navItems = [
+                { id: 'dashboard', label: 'Dashboard' },
+                { id: 'finance', label: 'Tài Chính' },
+                { id: 'directory', label: 'Danh Bạ Thuê' },
+                { id: 'management', label: 'Quản Lý Chi Tiết' },
+            ];
+
+            return (
+                <>
+                    <div className={`fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity md:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose}></div>
+                    <div className={`fixed top-0 left-0 h-full bg-white w-64 z-50 transform transition-transform md:hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                        <div className="p-4">
+                             <h1 className="text-2xl font-bold text-blue-600">H4Rent</h1>
+                        </div>
+                        <nav className="mt-4">
+                            {navItems.map(item => (
+                                <button 
+                                    key={item.id}
+                                    onClick={() => { setView(item.id); onClose(); }} 
+                                    className={`w-full text-left p-4 text-lg font-semibold ${view === item.id ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+                </>
+            );
+        };
+
+        const Header = ({ view, setView, onLogout, userEmail, onToggleSidebar }) => {
+            const navItems = [
+                { id: 'dashboard', label: 'Dashboard' },
+                { id: 'finance', label: 'Tài Chính' },
+                { id: 'directory', label: 'Danh Bạ Thuê' },
+                { id: 'management', label: 'Quản Lý Chi Tiết' },
+            ];
+
+            return (
+                <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-30">
+                    <div className="flex items-center gap-8">
+                        <button onClick={onToggleSidebar} className="p-2 md:hidden">
+                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </button>
+                        <h1 className="text-2xl font-bold text-blue-600">H4Rent</h1>
+                        <nav className="hidden md:flex gap-4">
+                            {navItems.map(item => (
+                                <button key={item.id} onClick={() => setView(item.id)} className={`pb-1 font-semibold ${view === item.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>{item.label}</button>
+                            ))}
+                        </nav>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="text-gray-700 mr-4 hidden sm:inline">Chào, {userEmail}</span>
+                        <button onClick={onLogout} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Đăng Xuất</button>
+                    </div>
+                </header>
             );
         };
 
@@ -545,6 +720,7 @@
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [view, setView] = useState('dashboard');
+            const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: () => {} });
 
             const [newBuildingName, setNewBuildingName] = useState('');
@@ -605,6 +781,7 @@
             const paymentsData = useCollection('payments');
             const contractsData = useCollection('contracts');
             const allBedsData = useCollectionGroup('beds');
+            const expensesData = useCollection('expenses');
 
             const availableTenants = useMemo(() => {
                 const occupiedTenantIds = new Set(
@@ -705,6 +882,18 @@
                 setShowAddTenantModal(false);
             };
             
+            const handleAddExpense = async (expenseData) => {
+                await db.collection('expenses').add({ ...expenseData, createdAt: Timestamp.now() });
+            };
+            
+            const handleDeleteExpense = (expenseId) => {
+                const onConfirm = async () => {
+                    await db.collection('expenses').doc(expenseId).delete();
+                    setConfirmModal({ show: false });
+                };
+                setConfirmModal({ show: true, title: 'Xác nhận xóa chi phí', message: 'Bạn có chắc chắn muốn xóa khoản chi phí này?', onConfirm });
+            };
+
             const handleCreateContract = async (contractDataPayload) => { 
                 if(!contractDataPayload.tenantId || !contractDataPayload.bedId) { 
                     alert("Vui lòng chọn người thuê!"); 
@@ -791,9 +980,9 @@
                     - Tên giường: ${allBedsData.find(b => b.id === contractData.bedId)?.name}
                     - Thuộc phòng: ${contractData.roomName}
                     - Tại nhà: ${contractData.buildingName}
-                    - Giá thuê hàng tháng: ${new Intl.NumberFormat('vi-VN').format(contractData.rentPrice)} VNĐ
+                    - Giá thuê hàng tháng: ${formatCurrency(contractData.rentPrice)} VNĐ
                     - Kỳ thanh toán: ${contractData.paymentCycle} tháng một lần
-                    - Tổng tiền thanh toán mỗi kỳ: ${new Intl.NumberFormat('vi-VN').format(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ
+                    - Tổng tiền thanh toán mỗi kỳ: ${formatCurrency(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ
 
                     Nội dung cần bao gồm các mục chính sau:
                     1. Thông tin các bên.
@@ -858,21 +1047,24 @@
 
             return (
                 <div className="bg-gray-50 min-h-screen">
-                    <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
-                        <div className="flex items-center gap-8">
-                            <h1 className="text-2xl font-bold text-blue-600">H4Rent</h1>
-                            <nav className="flex gap-4">
-                                <button onClick={() => setView('dashboard')} className={`pb-1 font-semibold ${view === 'dashboard' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Dashboard</button>
-                                <button onClick={() => setView('directory')} className={`pb-1 font-semibold ${view === 'directory' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Danh Bạ Thuê</button>
-                                <button onClick={() => setView('management')} className={`pb-1 font-semibold ${view === 'management' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Quản Lý Chi Tiết</button>
-                            </nav>
-                        </div>
-                        <div><span className="text-gray-700 mr-4">Chào, {user.email}</span><button onClick={handleLogout} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Đăng Xuất</button></div>
-                    </header>
+                    <Sidebar 
+                        isOpen={isSidebarOpen}
+                        onClose={() => setIsSidebarOpen(false)}
+                        view={view}
+                        setView={setView}
+                    />
+                    <Header
+                        view={view}
+                        setView={setView}
+                        onLogout={handleLogout}
+                        userEmail={user.email}
+                        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                    />
                     <main>
                         {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenContractModal={handleOpenContractModal} onOpenAddTenantModal={handleOpenAddTenantModal} />}
+                        {view === 'finance' && <FinanceManagement tenantsData={tenantsData} buildingsData={buildingsData} expensesData={expensesData} paymentsData={paymentsData} onAddExpense={handleAddExpense} onDeleteExpense={handleDeleteExpense} />}
                         {view === 'directory' && <TenantDirectory allBedsData={allBedsData} tenantsData={tenantsData} buildingsData={buildingsData} />}
-                        {view === 'management' && <Management onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onAddTenant={handleAddTenant} onOpenContractModal={handleOpenContractModal} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} onOpenAddTenantModal={handleOpenAddTenantModal} onOpenEditTenantModal={handleOpenEditTenantModal} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData}/>}
+                        {view === 'management' && <Management onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onOpenAddTenantModal={handleOpenAddTenantModal} onOpenContractModal={handleOpenContractModal} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} onOpenEditTenantModal={handleOpenEditTenantModal} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData}/>}
                     </main>
                     <ConfirmationModal show={confirmModal.show} onClose={() => setConfirmModal({ show: false })} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} />
                     
@@ -908,7 +1100,7 @@
                                 <div><label className="block text-sm font-medium text-gray-700">Chọn người thuê</label><select value={contractData.tenantId} onChange={e => setContractData({...contractData, tenantId: e.target.value})} className="input-form w-full" required><option value="">-- Chọn --</option>{availableTenants.length > 0 ? availableTenants.map(t => <option key={t.id} value={t.id}>{t.name} - {t.phone}</option>) : <option disabled>Không có người thuê nào trống</option>}</select></div>
                                 <div><label className="block text-sm font-medium text-gray-700">Giá thuê 1 tháng (VNĐ)</label><input type="number" value={contractData.rentPrice} onChange={e => setContractData({...contractData, rentPrice: e.target.value})} className="input-form w-full"/></div>
                                 <div><label className="block text-sm font-medium text-gray-700">Kỳ thanh toán</label><select value={contractData.paymentCycle} onChange={e => setContractData({...contractData, paymentCycle: e.target.value})} className="input-form w-full"><option value="3">3 Tháng</option><option value="6">6 Tháng</option></select></div>
-                                <div className="p-4 bg-blue-50 rounded-lg text-center"><p className="text-gray-600">Tổng tiền cho kỳ đầu tiên:</p><p className="text-2xl font-bold text-blue-700">{new Intl.NumberFormat('vi-VN').format(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ</p></div>
+                                <div className="p-4 bg-blue-50 rounded-lg text-center"><p className="text-gray-600">Tổng tiền cho kỳ đầu tiên:</p><p className="text-2xl font-bold text-blue-700">{formatCurrency(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ</p></div>
                                 
                                 <hr/>
 
