@@ -103,7 +103,6 @@
                 e.preventDefault();
                 setError('');
                 try {
-                    // Use compat auth method
                     await auth.signInWithEmailAndPassword(email, password);
                 } catch (err) {
                     setError('Email hoặc mật khẩu không đúng. Vui lòng thử lại.');
@@ -141,7 +140,7 @@
                             <h3 className="text-xl font-semibold">{title}</h3>
                             <button onClick={onClose} className="text-black text-2xl font-bold">&times;</button>
                         </div>
-                        <div className="p-4">{children}</div>
+                        <div className="p-4 max-h-[80vh] overflow-y-auto">{children}</div>
                     </div>
                 </div>
             );
@@ -165,7 +164,7 @@
             );
         };
 
-        const BottomSheet = ({ show, onClose, title, data, type, buildings, tenants }) => {
+        const BottomSheet = ({ show, onClose, title, data, type, buildings, tenants, onOpenContractModal }) => {
             const [activeTab, setActiveTab] = useState('all');
 
             useEffect(() => {
@@ -201,7 +200,27 @@
                         )}
                         <div className="p-4 max-h-[60vh] overflow-y-auto">
                             <ul className="space-y-3">
-                                {type === 'expiring' ? filteredData.map(c => { const tenantInfo = tenants.find(t => t.id === c.tenantId); return (<li key={c.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-sm text-gray-600">Hết hạn: {formatDate(c.endDate)}</p></li>)}) : filteredData.map(bed => { const tenantInfo = bed.tenantId ? tenants.find(t => t.id === bed.tenantId) : null; return (<li key={bed.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{bed.name}</p><p className="text-sm text-gray-600">{bed.buildingName || 'Chưa rõ'} - {bed.roomName || 'Chưa rõ'}</p>{tenantInfo && <p className="text-sm text-blue-600">Người thuê: {tenantInfo.name}</p>}</li>)})}
+                                {type === 'expiring' 
+                                 ? filteredData.map(c => { 
+                                     const tenantInfo = tenants.find(t => t.id === c.tenantId); 
+                                     return (<li key={c.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-sm text-gray-600">Hết hạn: {formatDate(c.endDate)}</p></li>)
+                                   }) 
+                                 : filteredData.map(bed => {
+                                     const tenantInfo = bed.tenantId ? tenants.find(t => t.id === bed.tenantId) : null;
+                                     return (
+                                        <li key={bed.id} className="p-3 bg-gray-100 rounded-lg flex justify-between items-center">
+                                            <div>
+                                                <p className="font-bold">{bed.name}</p>
+                                                <p className="text-sm text-gray-600">{bed.buildingName || 'Chưa rõ'} - {bed.roomName || 'Chưa rõ'}</p>
+                                                {tenantInfo && <p className="text-sm text-blue-600">Người thuê: {tenantInfo.name}</p>}
+                                            </div>
+                                            {type === 'available' && (
+                                                <button onClick={() => onOpenContractModal(bed)} className="btn-secondary text-xs">Tạo HĐ</button>
+                                            )}
+                                        </li>
+                                    )
+                                  })
+                                }
                                 {filteredData.length === 0 && <p className="text-gray-500 text-center py-4">Không có dữ liệu.</p>}
                             </ul>
                         </div>
@@ -216,7 +235,7 @@
             </div>
         );
 
-        const Dashboard = ({ allBeds, tenants, contracts, payments, buildingsData, onUpdatePaymentStatus }) => {
+        const Dashboard = ({ allBeds, tenants, contracts, payments, buildingsData, onUpdatePaymentStatus, onOpenContractModal, onOpenAddTenantModal }) => {
             const [bottomSheet, setBottomSheet] = useState({ show: false, title: '', data: [], type: '' });
 
             const stats = useMemo(() => {
@@ -268,10 +287,120 @@
                                     {payments.filter(p => p.status === 'unpaid').length === 0 && <p className="text-gray-500">Không có khoản thu nào.</p>}
                                 </ul>
                             </div>
+                             <div className="bg-white p-6 rounded-lg shadow">
+                                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Tác Vụ Nhanh</h2>
+                                <div className="space-y-3">
+                                    <button onClick={onOpenAddTenantModal} className="w-full btn-primary bg-indigo-500 hover:bg-indigo-700">Thêm Người Thuê Mới</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <BottomSheet show={bottomSheet.show} onClose={() => setBottomSheet({ ...bottomSheet, show: false })} title={bottomSheet.title} data={bottomSheet.data} type={bottomSheet.type} buildings={buildingsData} tenants={tenants} />
+                    <BottomSheet 
+                        show={bottomSheet.show} 
+                        onClose={() => setBottomSheet({ ...bottomSheet, show: false })} 
+                        title={bottomSheet.title} 
+                        data={bottomSheet.data} 
+                        type={bottomSheet.type} 
+                        buildings={buildingsData} 
+                        tenants={tenants}
+                        onOpenContractModal={(bed) => {
+                            onOpenContractModal(bed);
+                            setBottomSheet({ ...bottomSheet, show: false });
+                        }}
+                    />
                 </>
+            );
+        };
+
+        const TenantDirectory = ({ allBedsData, tenantsData, buildingsData }) => {
+            const [openBuildingId, setOpenBuildingId] = useState(null);
+
+            const directoryData = useMemo(() => {
+                const tenantsMap = new Map(tenantsData.map(t => [t.id, t]));
+                const buildingsMap = new Map();
+
+                allBedsData.forEach(bed => {
+                    if (!bed.buildingName || !bed.roomName) return;
+
+                    if (!buildingsMap.has(bed.buildingName)) {
+                        const buildingInfo = buildingsData.find(b => b.name === bed.buildingName);
+                        buildingsMap.set(bed.buildingName, {
+                            id: buildingInfo?.id || bed.buildingName,
+                            name: bed.buildingName,
+                            rooms: new Map()
+                        });
+                    }
+                    const building = buildingsMap.get(bed.buildingName);
+
+                    if (!building.rooms.has(bed.roomName)) {
+                        building.rooms.set(bed.roomName, {
+                            id: bed.roomId || `${building.id}_${bed.roomName}`,
+                            name: bed.roomName,
+                            beds: []
+                        });
+                    }
+                    const room = building.rooms.get(bed.roomName);
+
+                    room.beds.push({
+                        ...bed,
+                        tenant: bed.tenantId ? tenantsMap.get(bed.tenantId) : null
+                    });
+                });
+
+                return Array.from(buildingsMap.values()).map(building => ({
+                    ...building,
+                    rooms: Array.from(building.rooms.values()).sort((a, b) => a.name.localeCompare(b.name))
+                }));
+            }, [allBedsData, tenantsData, buildingsData]);
+
+            const toggleBuilding = (buildingId) => {
+                setOpenBuildingId(prevId => (prevId === buildingId ? null : buildingId));
+            };
+
+            if (directoryData.length === 0) {
+                return <div className="p-8 text-center text-gray-500">Không có dữ liệu để hiển thị.</div>;
+            }
+
+            return (
+                <div className="p-4 md:p-8 space-y-4">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6">Danh Bạ Người Thuê Theo Tòa Nhà</h2>
+                    {directoryData.map(building => (
+                        <div key={building.id} className="bg-white rounded-lg shadow overflow-hidden">
+                            <button onClick={() => toggleBuilding(building.id)} className="w-full text-left p-4 bg-gray-50 hover:bg-gray-100 focus:outline-none flex justify-between items-center transition">
+                                <h3 className="text-xl font-semibold text-gray-800">{building.name}</h3>
+                                <span className={`transform transition-transform duration-300 ${openBuildingId === building.id ? 'rotate-180' : ''}`}>
+                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </span>
+                            </button>
+                            {openBuildingId === building.id && (
+                                <div className="p-4 space-y-4 border-t">
+                                    {building.rooms.map(room => (
+                                        <div key={room.id} className="border rounded-lg p-4 bg-gray-50/50">
+                                            <h4 className="text-lg font-bold mb-3 text-blue-700">Phòng: {room.name}</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {room.beds.sort((a,b) => a.name.localeCompare(b.name)).map(bed => (
+                                                    <div key={bed.id} className={`p-4 rounded-lg border ${bed.status === 'occupied' ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                                                        <p className="font-bold text-gray-800">Giường: {bed.name}</p>
+                                                        {bed.status === 'occupied' && bed.tenant ? (
+                                                            <div className="mt-2 text-sm space-y-1 text-gray-700">
+                                                                <p><span className="font-semibold">Người thuê:</span> {bed.tenant.name}</p>
+                                                                <p><span className="font-semibold">SĐT:</span> {bed.tenant.phone}</p>
+                                                                <p><span className="font-semibold">CCCD:</span> {bed.tenant.idCard || 'N/A'}</p>
+                                                                <p><span className="font-semibold">Trường/Việc:</span> {bed.tenant.school || 'N/A'}</p>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="mt-2 text-sm text-yellow-800 font-semibold">Trạng thái: Trống</p>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
             );
         };
 
@@ -311,25 +440,16 @@
         };
 
         const Management = ({ 
-            allBedsData, buildingsData, tenantsData, paymentsData, 
-            onAddBuilding, onAddRoom, onAddBed, onAddTenant, onCreateContract,
-            onUpdateItem, onDeleteItem, onUpdateTenant, onDeletePayment,
+            onAddBuilding, onAddRoom, onAddBed, onOpenAddTenantModal, onOpenContractModal,
+            onUpdateItem, onDeleteItem, onUpdateTenant, onDeletePayment, onOpenEditTenantModal,
             newBuildingName, setNewBuildingName,
             newRoomName, setNewRoomName,
-            newBedName, setNewBedName
+            newBedName, setNewBedName,
+            buildingsData, tenantsData, paymentsData
         }) => {
             const [selectedBuilding, setSelectedBuilding] = useState(null);
             const [selectedRoom, setSelectedRoom] = useState(null);
             
-            const [showAddTenantModal, setShowAddTenantModal] = useState(false);
-            const [newTenant, setNewTenant] = useState({ name: '', phone: '', idCard: '', school: '' });
-            
-            const [showEditTenantModal, setShowEditTenantModal] = useState(false);
-            const [editingTenant, setEditingTenant] = useState(null);
-
-            const [showContractModal, setShowContractModal] = useState(false);
-            const [contractData, setContractData] = useState({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' });
-
             const useSubCollection = (parentCollection, parentId, subCollectionName) => {
                 const [data, setData] = useState([]);
                 useEffect(() => {
@@ -346,27 +466,35 @@
             };
 
             const roomsData = useSubCollection('buildings', selectedBuilding?.id, 'rooms');
-            const bedsData = useSubCollection('rooms', selectedRoom?.id, 'beds');
+            const [bedsData, setBedsData] = useState([]);
 
-            // Lọc ra những người thuê chưa có giường
-            const availableTenants = useMemo(() => {
-                const occupiedTenantIds = new Set(
-                    allBedsData
-                        .filter(bed => bed.status === 'occupied' && bed.tenantId)
-                        .map(bed => bed.tenantId)
-                );
-                return tenantsData.filter(tenant => !occupiedTenantIds.has(tenant.id));
-            }, [tenantsData, allBedsData]);
+            useEffect(() => {
+                if (!selectedRoom?.id || !selectedBuilding?.id) {
+                    setBedsData([]);
+                    return;
+                }
+                const path = `buildings/${selectedBuilding.id}/rooms/${selectedRoom.id}/beds`;
+                const q = db.collection(path);
+                const unsubscribe = q.onSnapshot((querySnapshot) => {
+                    let items = [];
+                    querySnapshot.forEach((doc) => {
+                        items.push({ 
+                            id: doc.id, 
+                            ...doc.data(),
+                            path: doc.ref.path,
+                            roomId: selectedRoom.id,
+                            buildingId: selectedBuilding.id,
+                            roomName: selectedRoom.name,
+                            buildingName: selectedBuilding.name
+                        });
+                    });
+                    items.sort((a, b) => a.name.localeCompare(b.name));
+                    setBedsData(items);
+                });
+                return () => unsubscribe();
+            }, [selectedRoom, selectedBuilding]);
 
-            const handleAddTenantInternal = (e) => { e.preventDefault(); onAddTenant(newTenant); setNewTenant({ name: '', phone: '', idCard: '', school: '' }); setShowAddTenantModal(false); };
-            const handleEditTenantInternal = (e) => { e.preventDefault(); onUpdateTenant(editingTenant.id, editingTenant); setEditingTenant(null); setShowEditTenantModal(false); };
-            const handleCreateContractInternal = (e) => { e.preventDefault(); onCreateContract({ ...contractData, buildingId: selectedBuilding.id, roomId: selectedRoom.id, buildingName: selectedBuilding.name, roomName: selectedRoom.name }); setShowContractModal(false); setContractData({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' }); };
-            const handleAddBedInternal = (e) => { e.preventDefault(); if(!selectedRoom || !selectedBuilding) return; onAddBed(e, selectedRoom.id, selectedBuilding.name, selectedRoom.name); }
-
-            const openEditTenantModal = (tenant) => {
-                setEditingTenant(tenant);
-                setShowEditTenantModal(true);
-            };
+            const handleAddBedInternal = (e) => { e.preventDefault(); if(!selectedRoom || !selectedBuilding) return; onAddBed(e, selectedRoom.id, selectedBuilding.id, selectedBuilding.name, selectedRoom.name); }
 
             return (
                 <div className="p-4 md:p-8">
@@ -390,8 +518,8 @@
                                     <h3 className="font-bold text-lg mb-2">3. Giường</h3>
                                     {selectedRoom && (<>
                                         <form onSubmit={handleAddBedInternal} className="flex gap-2 mb-4"><input type="text" value={newBedName} onChange={e => setNewBedName(e.target.value)} placeholder="Tên giường mới" className="input-form flex-grow"/><button type="submit" className="btn-primary">+</button></form>
-                                        <ul className="space-y-2">{bedsData.map(bed => (<EditableListItem key={bed.id} item={bed} onUpdate={(id, name) => onUpdateItem(`rooms/${selectedRoom.id}/beds`, id, name)} onDelete={(item) => onDeleteItem('bed', item, selectedRoom.id)}>
-                                            {bed.status === 'available' ? <button onClick={(e) => { e.stopPropagation(); setContractData({...contractData, bedId: bed.id }); setShowContractModal(true); }} className="btn-secondary text-xs ml-auto">Tạo HĐ</button> : <span className="text-xs font-semibold text-red-700 ml-auto">Đã thuê</span>}
+                                        <ul className="space-y-2">{bedsData.map(bed => (<EditableListItem key={bed.id} item={bed} onUpdate={(id, name) => onUpdateItem(`buildings/${selectedBuilding.id}/rooms/${selectedRoom.id}/beds`, id, name)} onDelete={(item) => onDeleteItem('bed', item, { buildingId: selectedBuilding.id, roomId: selectedRoom.id })}>
+                                            {bed.status === 'available' ? <button onClick={(e) => { e.stopPropagation(); onOpenContractModal(bed); }} className="btn-secondary text-xs ml-auto">Tạo HĐ</button> : <span className="text-xs font-semibold text-red-700 ml-auto">Đã thuê</span>}
                                         </EditableListItem>))}</ul>
                                     </>)}
                                 </div>
@@ -399,8 +527,8 @@
                         </div>
                         <div className="space-y-8">
                             <div className="bg-white p-6 rounded-lg shadow">
-                                <div className="flex justify-between items-center mb-4 border-b pb-2"><h2 className="text-xl font-semibold">Người Thuê</h2><button onClick={() => setShowAddTenantModal(true)} className="btn-primary">Thêm Người Thuê</button></div>
-                                <ul className="space-y-2 max-h-60 overflow-y-auto">{tenantsData.map(t => (<li key={t.id} className="group p-2 bg-gray-50 rounded flex justify-between items-center"><div className="flex-grow"><p className="font-bold">{t.name}</p><p className="text-sm text-gray-600">{t.phone} - {t.school}</p></div><div className="hidden group-hover:flex items-center gap-2 pl-2"><button onClick={() => openEditTenantModal(t)} className="text-sm text-blue-600 hover:text-blue-800">Sửa</button><button onClick={() => onDeleteItem('tenant', t)} className="text-sm text-red-600 hover:text-red-800">Xóa</button></div></li>))}</ul>
+                                <div className="flex justify-between items-center mb-4 border-b pb-2"><h2 className="text-xl font-semibold">Người Thuê</h2><button onClick={onOpenAddTenantModal} className="btn-primary">Thêm Người Thuê</button></div>
+                                <ul className="space-y-2 max-h-60 overflow-y-auto">{tenantsData.map(t => (<li key={t.id} className="group p-2 bg-gray-50 rounded flex justify-between items-center"><div className="flex-grow"><p className="font-bold">{t.name}</p><p className="text-sm text-gray-600">{t.phone} - {t.school}</p></div><div className="hidden group-hover:flex items-center gap-2 pl-2"><button onClick={() => onOpenEditTenantModal(t)} className="text-sm text-blue-600 hover:text-blue-800">Sửa</button><button onClick={() => onDeleteItem('tenant', t)} className="text-sm text-red-600 hover:text-red-800">Xóa</button></div></li>))}</ul>
                             </div>
                             <div className="bg-white p-6 rounded-lg shadow">
                                 <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Đã Thanh Toán</h2>
@@ -408,9 +536,6 @@
                             </div>
                         </div>
                     </div>
-                    <Modal show={showAddTenantModal} onClose={() => setShowAddTenantModal(false)} title="Thêm Người Thuê Mới"><form onSubmit={handleAddTenantInternal}><div className="space-y-4"><input value={newTenant.name} onChange={e => setNewTenant({...newTenant, name: e.target.value})} placeholder="Họ và Tên" className="input-form w-full" required/><input value={newTenant.phone} onChange={e => setNewTenant({...newTenant, phone: e.target.value})} placeholder="Số điện thoại" className="input-form w-full" required/><input value={newTenant.idCard} onChange={e => setNewTenant({...newTenant, idCard: e.target.value})} placeholder="Số CCCD" className="input-form w-full"/><input value={newTenant.school} onChange={e => setNewTenant({...newTenant, school: e.target.value})} placeholder="Trường học/Nơi làm việc" className="input-form w-full"/><button type="submit" className="btn-primary w-full">Lưu</button></div></form></Modal>
-                    {editingTenant && <Modal show={showEditTenantModal} onClose={() => setShowEditTenantModal(false)} title="Sửa Thông Tin Người Thuê"><form onSubmit={handleEditTenantInternal}><div className="space-y-4"><input value={editingTenant.name} onChange={e => setEditingTenant({...editingTenant, name: e.target.value})} placeholder="Họ và Tên" className="input-form w-full" required/><input value={editingTenant.phone} onChange={e => setEditingTenant({...editingTenant, phone: e.target.value})} placeholder="Số điện thoại" className="input-form w-full" required/><input value={editingTenant.idCard} onChange={e => setEditingTenant({...editingTenant, idCard: e.target.value})} placeholder="Số CCCD" className="input-form w-full"/><input value={editingTenant.school} onChange={e => setEditingTenant({...editingTenant, school: e.target.value})} placeholder="Trường học/Nơi làm việc" className="input-form w-full"/><button type="submit" className="btn-primary w-full">Cập Nhật</button></div></form></Modal>}
-                    <Modal show={showContractModal} onClose={() => setShowContractModal(false)} title="Tạo Hợp Đồng Mới"><form onSubmit={handleCreateContractInternal}><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">Chọn người thuê</label><select value={contractData.tenantId} onChange={e => setContractData({...contractData, tenantId: e.target.value})} className="input-form w-full" required><option value="">-- Chọn --</option>{availableTenants.length > 0 ? availableTenants.map(t => <option key={t.id} value={t.id}>{t.name} - {t.phone}</option>) : <option disabled>Không có người thuê nào trống</option>}</select></div><div><label className="block text-sm font-medium text-gray-700">Giá thuê 1 tháng (VNĐ)</label><input type="number" value={contractData.rentPrice} onChange={e => setContractData({...contractData, rentPrice: e.target.value})} className="input-form w-full"/></div><div><label className="block text-sm font-medium text-gray-700">Kỳ thanh toán</label><select value={contractData.paymentCycle} onChange={e => setContractData({...contractData, paymentCycle: e.target.value})} className="input-form w-full"><option value="3">3 Tháng</option><option value="6">6 Tháng</option></select></div><div className="p-4 bg-blue-50 rounded-lg text-center"><p className="text-gray-600">Tổng tiền cho kỳ đầu tiên:</p><p className="text-2xl font-bold text-blue-700">{new Intl.NumberFormat('vi-VN').format(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ</p></div><button type="submit" className="btn-primary w-full">Xác Nhận Tạo Hợp Đồng</button></div></form></Modal>
                 </div>
             );
         };
@@ -425,6 +550,21 @@
             const [newBuildingName, setNewBuildingName] = useState('');
             const [newRoomName, setNewRoomName] = useState('');
             const [newBedName, setNewBedName] = useState('');
+
+            // State for Modals (lifted up)
+            const [showContractModal, setShowContractModal] = useState(false);
+            const [showAddTenantModal, setShowAddTenantModal] = useState(false);
+            const [showEditTenantModal, setShowEditTenantModal] = useState(false);
+
+            // State for Modal Data
+            const [contractData, setContractData] = useState({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' });
+            const [newTenant, setNewTenant] = useState({ name: '', phone: '', idCard: '', school: '' });
+            const [editingTenant, setEditingTenant] = useState(null);
+
+            // State for Gemini feature
+            const [generatedContractText, setGeneratedContractText] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [copySuccess, setCopySuccess] = useState('');
 
             const useCollection = (collectionName) => {
                 const [data, setData] = useState([]);
@@ -448,7 +588,11 @@
                     const q = db.collectionGroup(collectionId);
                     const unsubscribe = q.onSnapshot((querySnapshot) => {
                         const items = [];
-                        querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                        querySnapshot.forEach((doc) => {
+                            const bedData = doc.data();
+                            bedData.path = doc.ref.path;
+                            items.push({ id: doc.id, ...bedData });
+                        });
                         setData(items);
                     });
                     return () => unsubscribe();
@@ -461,6 +605,15 @@
             const paymentsData = useCollection('payments');
             const contractsData = useCollection('contracts');
             const allBedsData = useCollectionGroup('beds');
+
+            const availableTenants = useMemo(() => {
+                const occupiedTenantIds = new Set(
+                    allBedsData
+                        .filter(bed => bed.status === 'occupied' && bed.tenantId)
+                        .map(bed => bed.tenantId)
+                );
+                return tenantsData.filter(tenant => !occupiedTenantIds.has(tenant.id));
+            }, [tenantsData, allBedsData]);
 
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -478,6 +631,8 @@
             const handleUpdateTenant = async (tenantId, updatedData) => {
                 const tenantRef = db.collection('tenants').doc(tenantId);
                 await tenantRef.update(updatedData);
+                setShowEditTenantModal(false);
+                setEditingTenant(null);
             };
 
             const handleDeletePayment = (paymentId) => {
@@ -488,16 +643,21 @@
                 setConfirmModal({ show: true, title: 'Xác nhận xóa thanh toán', message: 'Bạn có chắc chắn muốn xóa khoản thanh toán này?', onConfirm });
             };
 
-            const handleDeleteItem = (type, item, parentId = null) => {
+            const handleDeleteItem = (type, item, parentData = null) => {
                 const onConfirm = async () => {
                     try {
                         if (type === 'bed') {
                             if (item.status === 'occupied') { alert('Không thể xóa giường đã có người thuê.'); return; }
-                            await db.doc(`rooms/${parentId}/beds/${item.id}`).delete();
+                            if (!parentData?.buildingId || !parentData?.roomId) {
+                                alert('Không thể xóa giường, thiếu thông tin phòng/nhà.');
+                                return;
+                            }
+                            await db.doc(`buildings/${parentData.buildingId}/rooms/${parentData.roomId}/beds/${item.id}`).delete();
                         } else if (type === 'room') {
+                            const buildingId = parentData;
                             const batch = db.batch();
-                            const roomRef = db.doc(`buildings/${parentId}/rooms/${item.id}`);
-                            const bedsQuery = db.collection(`rooms/${item.id}/beds`);
+                            const roomRef = db.doc(`buildings/${buildingId}/rooms/${item.id}`);
+                            const bedsQuery = db.collection(`buildings/${buildingId}/rooms/${item.id}/beds`);
                             const bedsSnapshot = await bedsQuery.get();
                             bedsSnapshot.forEach(bedDoc => batch.delete(bedDoc.ref));
                             batch.delete(roomRef);
@@ -508,7 +668,7 @@
                             const roomsQuery = db.collection(`buildings/${item.id}/rooms`);
                             const roomsSnapshot = await roomsQuery.get();
                             for (const roomDoc of roomsSnapshot.docs) {
-                                const bedsQuery = db.collection(`rooms/${roomDoc.id}/beds`);
+                                const bedsQuery = db.collection(`buildings/${roomDoc.id}/rooms/${roomDoc.id}/beds`);
                                 const bedsSnapshot = await bedsQuery.get();
                                 bedsSnapshot.forEach(bedDoc => batch.delete(bedDoc.ref));
                                 batch.delete(roomDoc.ref);
@@ -536,11 +696,162 @@
 
             const handleAddBuilding = async (e) => { e.preventDefault(); if (newBuildingName.trim() === '') return; await db.collection('buildings').add({ name: newBuildingName, createdAt: Timestamp.now() }); setNewBuildingName(''); };
             const handleAddRoom = async (e, buildingId) => { e.preventDefault(); if (newRoomName.trim() === '' || !buildingId) return; await db.collection('buildings').doc(buildingId).collection('rooms').add({ name: newRoomName, createdAt: Timestamp.now() }); setNewRoomName(''); };
-            const handleAddBed = async (e, roomId, buildingName, roomName) => { e.preventDefault(); if (newBedName.trim() === '' || !roomId) return; await db.collection('rooms').doc(roomId).collection('beds').add({ name: newBedName, status: 'available', tenantId: null, createdAt: Timestamp.now(), buildingName: buildingName, roomName: roomName }); setNewBedName(''); };
-            const handleAddTenant = async (tenantData) => { if (tenantData.name.trim() === '' || tenantData.phone.trim() === '') return; await db.collection('tenants').add(tenantData); };
-            const handleCreateContract = async (contractData) => { if(!contractData.tenantId || !contractData.bedId) { alert("Vui lòng chọn người thuê!"); return; } try { const contractRef = await db.collection('contracts').add({ ...contractData, startDate: Timestamp.now() }); const amount = parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle); await db.collection('payments').add({ contractId: contractRef.id, tenantId: contractData.tenantId, amount: amount, dueDate: Timestamp.now(), status: 'unpaid' }); const bedRef = db.doc(`rooms/${contractData.roomId}/beds/${contractData.bedId}`); await bedRef.update({ status: 'occupied', tenantId: contractData.tenantId }); } catch (error) { console.error("Lỗi tạo hợp đồng:", error); alert("Đã có lỗi xảy ra khi tạo hợp đồng."); }};
+            const handleAddBed = async (e, roomId, buildingId, buildingName, roomName) => { e.preventDefault(); if (newBedName.trim() === '' || !roomId || !buildingId) return; await db.collection('buildings').doc(buildingId).collection('rooms').doc(roomId).collection('beds').add({ name: newBedName, status: 'available', tenantId: null, createdAt: Timestamp.now(), buildingId, roomId, buildingName, roomName }); setNewBedName(''); };
+            
+            const handleAddTenant = async (tenantData) => { 
+                if (tenantData.name.trim() === '' || tenantData.phone.trim() === '') return; 
+                await db.collection('tenants').add(tenantData); 
+                setNewTenant({ name: '', phone: '', idCard: '', school: '' });
+                setShowAddTenantModal(false);
+            };
+            
+            const handleCreateContract = async (contractDataPayload) => { 
+                if(!contractDataPayload.tenantId || !contractDataPayload.bedId) { 
+                    alert("Vui lòng chọn người thuê!"); 
+                    return; 
+                } 
+                if(!contractDataPayload.bedPath) {
+                    alert("Lỗi: Không tìm thấy đường dẫn của giường. Không thể cập nhật trạng thái.");
+                    return;
+                }
+                try { 
+                    const contractRef = await db.collection('contracts').add({ ...contractDataPayload, startDate: Timestamp.now() }); 
+                    const amount = parseInt(contractDataPayload.rentPrice) * parseInt(contractDataPayload.paymentCycle); 
+                    await db.collection('payments').add({ contractId: contractRef.id, tenantId: contractDataPayload.tenantId, amount: amount, dueDate: Timestamp.now(), status: 'unpaid' }); 
+                    
+                    const bedRef = db.doc(contractDataPayload.bedPath); 
+                    await bedRef.update({ status: 'occupied', tenantId: contractDataPayload.tenantId }); 
+                    
+                    setShowContractModal(false);
+                    setContractData({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' });
+                } catch (error) { 
+                    console.error("Lỗi tạo hợp đồng:", error); 
+                    alert("Đã có lỗi xảy ra khi tạo hợp đồng."); 
+                }
+            };
+            
             const handleUpdatePaymentStatus = async (paymentId, newStatus) => { const paymentRef = db.collection('payments').doc(paymentId); await paymentRef.update({ status: newStatus }); };
             const handleLogout = () => { auth.signOut(); };
+
+            const handleOpenContractModal = (bed) => {
+                const bedForContract = { ...bed };
+
+                if (!bedForContract.buildingId && bedForContract.buildingName) {
+                    const building = buildingsData.find(b => b.name === bedForContract.buildingName);
+                    if (building) {
+                        bedForContract.buildingId = building.id;
+                    }
+                }
+                
+                if (!bedForContract.id || !bedForContract.path) {
+                    alert('Thông tin giường không đầy đủ để tạo hợp đồng. Thiếu ID hoặc đường dẫn.');
+                    console.error('Invalid bed data for contract:', bedForContract);
+                    return;
+                }
+
+                setContractData({
+                    bedId: bedForContract.id,
+                    roomId: bedForContract.roomId,
+                    buildingId: bedForContract.buildingId,
+                    buildingName: bedForContract.buildingName,
+                    roomName: bedForContract.roomName,
+                    tenantId: '',
+                    paymentCycle: '3',
+                    rentPrice: '2000000',
+                    bedPath: bedForContract.path
+                });
+                setShowContractModal(true);
+            };
+
+            const handleOpenAddTenantModal = () => {
+                setNewTenant({ name: '', phone: '', idCard: '', school: '' });
+                setShowAddTenantModal(true);
+            };
+
+            const handleOpenEditTenantModal = (tenant) => {
+                setEditingTenant(tenant);
+                setShowEditTenantModal(true);
+            };
+
+            const handleGenerateContractText = async () => {
+                if (!contractData.tenantId || !contractData.bedId) {
+                    alert("Vui lòng chọn người thuê và giường trước khi soạn thảo.");
+                    return;
+                }
+                setIsGenerating(true);
+                setGeneratedContractText('');
+                setCopySuccess('');
+
+                const tenant = tenantsData.find(t => t.id === contractData.tenantId);
+                
+                const prompt = `
+                    Hãy soạn thảo các điều khoản hợp đồng cho thuê nhà đơn giản bằng tiếng Việt cho các thông tin sau:
+                    - Tên người thuê: ${tenant?.name}
+                    - Số điện thoại: ${tenant?.phone}
+                    - Tên giường: ${allBedsData.find(b => b.id === contractData.bedId)?.name}
+                    - Thuộc phòng: ${contractData.roomName}
+                    - Tại nhà: ${contractData.buildingName}
+                    - Giá thuê hàng tháng: ${new Intl.NumberFormat('vi-VN').format(contractData.rentPrice)} VNĐ
+                    - Kỳ thanh toán: ${contractData.paymentCycle} tháng một lần
+                    - Tổng tiền thanh toán mỗi kỳ: ${new Intl.NumberFormat('vi-VN').format(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ
+
+                    Nội dung cần bao gồm các mục chính sau:
+                    1. Thông tin các bên.
+                    2. Đối tượng hợp đồng (giường, phòng, nhà).
+                    3. Giá thuê và phương thức thanh toán.
+                    4. Thời hạn hợp đồng (để trống hoặc ghi là theo kỳ thanh toán).
+                    5. Quyền và nghĩa vụ của người thuê (giữ gìn vệ sinh chung, bảo quản tài sản, không gây mất trật tự).
+                    6. Quyền và nghĩa vụ của bên cho thuê.
+                    7. Điều khoản chung và chữ ký các bên.
+
+                    Vui lòng trình bày rõ ràng, chuyên nghiệp và dễ hiểu dưới dạng văn bản thuần túy.
+                `;
+
+                try {
+                    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                    const payload = { contents: chatHistory };
+                    const apiKey = ""; 
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
+                    const result = await response.json();
+
+                    if (result.candidates?.[0]?.content?.parts?.[0]) {
+                        setGeneratedContractText(result.candidates[0].content.parts[0].text);
+                    } else {
+                        console.error("Unexpected API response structure:", result);
+                        setGeneratedContractText("Không thể tạo nội dung hợp đồng. Phản hồi từ API không hợp lệ.");
+                    }
+                } catch (error) {
+                    console.error("Lỗi khi gọi Gemini API:", error);
+                    setGeneratedContractText("Đã có lỗi xảy ra khi tạo nội dung hợp đồng. Vui lòng thử lại.");
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+
+            const copyToClipboard = (text) => {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    setCopySuccess('Đã sao chép!');
+                    setTimeout(() => setCopySuccess(''), 2000);
+                } catch (err) {
+                    setCopySuccess('Sao chép thất bại!');
+                    console.error('Không thể sao chép: ', err);
+                }
+                document.body.removeChild(textArea);
+            };
 
             if (loading) return <div className="min-h-screen flex items-center justify-center">Đang tải...</div>;
             if (!user) return <LoginScreen />;
@@ -548,14 +859,84 @@
             return (
                 <div className="bg-gray-50 min-h-screen">
                     <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
-                        <div className="flex items-center gap-8"><h1 className="text-2xl font-bold text-blue-600">H4Rent</h1><nav className="flex gap-4"><button onClick={() => setView('dashboard')} className={`pb-1 font-semibold ${view === 'dashboard' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Dashboard</button><button onClick={() => setView('management')} className={`pb-1 font-semibold ${view === 'management' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Quản Lý Chi Tiết</button></nav></div>
+                        <div className="flex items-center gap-8">
+                            <h1 className="text-2xl font-bold text-blue-600">H4Rent</h1>
+                            <nav className="flex gap-4">
+                                <button onClick={() => setView('dashboard')} className={`pb-1 font-semibold ${view === 'dashboard' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Dashboard</button>
+                                <button onClick={() => setView('directory')} className={`pb-1 font-semibold ${view === 'directory' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Danh Bạ Thuê</button>
+                                <button onClick={() => setView('management')} className={`pb-1 font-semibold ${view === 'management' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Quản Lý Chi Tiết</button>
+                            </nav>
+                        </div>
                         <div><span className="text-gray-700 mr-4">Chào, {user.email}</span><button onClick={handleLogout} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Đăng Xuất</button></div>
                     </header>
                     <main>
-                        {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus}/>}
-                        {view === 'management' && <Management allBedsData={allBedsData} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData} onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onAddTenant={handleAddTenant} onCreateContract={handleCreateContract} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName}/>}
+                        {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenContractModal={handleOpenContractModal} onOpenAddTenantModal={handleOpenAddTenantModal} />}
+                        {view === 'directory' && <TenantDirectory allBedsData={allBedsData} tenantsData={tenantsData} buildingsData={buildingsData} />}
+                        {view === 'management' && <Management onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onAddTenant={handleAddTenant} onOpenContractModal={handleOpenContractModal} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} onOpenAddTenantModal={handleOpenAddTenantModal} onOpenEditTenantModal={handleOpenEditTenantModal} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData}/>}
                     </main>
                     <ConfirmationModal show={confirmModal.show} onClose={() => setConfirmModal({ show: false })} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} />
+                    
+                    <Modal show={showAddTenantModal} onClose={() => setShowAddTenantModal(false)} title="Thêm Người Thuê Mới">
+                        <form onSubmit={(e) => { e.preventDefault(); handleAddTenant(newTenant); }}>
+                            <div className="space-y-4">
+                                <input value={newTenant.name} onChange={e => setNewTenant({...newTenant, name: e.target.value})} placeholder="Họ và Tên" className="input-form w-full" required/>
+                                <input value={newTenant.phone} onChange={e => setNewTenant({...newTenant, phone: e.target.value})} placeholder="Số điện thoại" className="input-form w-full" required/>
+                                <input value={newTenant.idCard} onChange={e => setNewTenant({...newTenant, idCard: e.target.value})} placeholder="Số CCCD" className="input-form w-full"/>
+                                <input value={newTenant.school} onChange={e => setNewTenant({...newTenant, school: e.target.value})} placeholder="Trường học/Nơi làm việc" className="input-form w-full"/>
+                                <button type="submit" className="btn-primary w-full">Lưu</button>
+                            </div>
+                        </form>
+                    </Modal>
+
+                    {editingTenant && (
+                        <Modal show={showEditTenantModal} onClose={() => setShowEditTenantModal(false)} title="Sửa Thông Tin Người Thuê">
+                            <form onSubmit={(e) => { e.preventDefault(); handleUpdateTenant(editingTenant.id, editingTenant); }}>
+                                <div className="space-y-4">
+                                    <input value={editingTenant.name} onChange={e => setEditingTenant({...editingTenant, name: e.target.value})} placeholder="Họ và Tên" className="input-form w-full" required/>
+                                    <input value={editingTenant.phone} onChange={e => setEditingTenant({...editingTenant, phone: e.target.value})} placeholder="Số điện thoại" className="input-form w-full" required/>
+                                    <input value={editingTenant.idCard} onChange={e => setEditingTenant({...editingTenant, idCard: e.target.value})} placeholder="Số CCCD" className="input-form w-full"/>
+                                    <input value={editingTenant.school} onChange={e => setEditingTenant({...editingTenant, school: e.target.value})} placeholder="Trường học/Nơi làm việc" className="input-form w-full"/>
+                                    <button type="submit" className="btn-primary w-full">Cập Nhật</button>
+                                </div>
+                            </form>
+                        </Modal>
+                    )}
+
+                    <Modal show={showContractModal} onClose={() => {setShowContractModal(false); setGeneratedContractText(''); setCopySuccess('');}} title="Tạo Hợp Đồng Mới">
+                        <form onSubmit={(e) => {e.preventDefault(); handleCreateContract(contractData);}}>
+                            <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-gray-700">Chọn người thuê</label><select value={contractData.tenantId} onChange={e => setContractData({...contractData, tenantId: e.target.value})} className="input-form w-full" required><option value="">-- Chọn --</option>{availableTenants.length > 0 ? availableTenants.map(t => <option key={t.id} value={t.id}>{t.name} - {t.phone}</option>) : <option disabled>Không có người thuê nào trống</option>}</select></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Giá thuê 1 tháng (VNĐ)</label><input type="number" value={contractData.rentPrice} onChange={e => setContractData({...contractData, rentPrice: e.target.value})} className="input-form w-full"/></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Kỳ thanh toán</label><select value={contractData.paymentCycle} onChange={e => setContractData({...contractData, paymentCycle: e.target.value})} className="input-form w-full"><option value="3">3 Tháng</option><option value="6">6 Tháng</option></select></div>
+                                <div className="p-4 bg-blue-50 rounded-lg text-center"><p className="text-gray-600">Tổng tiền cho kỳ đầu tiên:</p><p className="text-2xl font-bold text-blue-700">{new Intl.NumberFormat('vi-VN').format(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ</p></div>
+                                
+                                <hr/>
+
+                                <button type="button" onClick={handleGenerateContractText} disabled={isGenerating} className="w-full flex justify-center items-center gap-2 btn-secondary bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                                    {isGenerating ? 'Đang soạn thảo...' : 'Soạn Thảo Khoản Hợp Đồng ✨'}
+                                </button>
+
+                                {isGenerating && <div className="text-center p-4 text-purple-700">Đang kết nối với AI, vui lòng chờ...</div>}
+
+                                {generatedContractText && (
+                                    <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                                        <h4 className="font-semibold text-lg mb-2">Nội dung hợp đồng gợi ý:</h4>
+                                        <textarea readOnly className="w-full h-64 p-2 border rounded bg-white font-mono text-sm" value={generatedContractText}></textarea>
+                                        <div className="mt-2">
+                                            <button type="button" onClick={() => copyToClipboard(generatedContractText)} className="btn-secondary bg-gray-600 hover:bg-gray-700">
+                                                Sao chép nội dung
+                                            </button>
+                                            {copySuccess && <span className="ml-4 text-green-600 font-semibold">{copySuccess}</span>}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <hr/>
+
+                                <button type="submit" className="btn-primary w-full">Xác Nhận Tạo Hợp Đồng</button>
+                            </div>
+                        </form>
+                    </Modal>
                 </div>
             );
         };
