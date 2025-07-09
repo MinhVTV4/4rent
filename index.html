@@ -232,12 +232,15 @@
         };
 
         const StatCard = ({ title, value, subtext, colorClass, onClick }) => (
-            <div className={`p-6 rounded-lg shadow-lg text-white ${colorClass} cursor-pointer hover:opacity-90 transition-opacity`} onClick={onClick}>
+            <div 
+                className={`p-6 rounded-lg shadow-lg text-white ${colorClass} cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl`} 
+                onClick={onClick}
+            >
                 <p className="text-lg font-semibold">{title}</p><p className="text-4xl font-bold">{value}</p><p className="text-sm opacity-80">{subtext}</p>
             </div>
         );
 
-        const Dashboard = ({ allBeds, tenants, contracts, payments, buildingsData, onUpdatePaymentStatus, onOpenContractModal, onOpenAddTenantModal }) => {
+        const Dashboard = ({ allBeds, tenants, contracts, payments, buildingsData, onUpdatePaymentStatus, onOpenContractModal }) => {
             const [bottomSheet, setBottomSheet] = useState({ show: false, title: '', data: [], type: '' });
 
             const stats = useMemo(() => {
@@ -281,20 +284,12 @@
                             <StatCard title="Giường còn trống" value={stats.availableBeds} subtext="Sẵn sàng cho thuê" colorClass="bg-yellow-500" onClick={() => handleStatCardClick('available')} />
                             <StatCard title="Hợp đồng sắp hết hạn" value={expiringContracts.length} subtext="Trong 30 ngày tới" colorClass="bg-red-500" onClick={() => handleStatCardClick('expiring')} />
                         </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="bg-white p-6 rounded-lg shadow">
-                                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Cần Thu</h2>
-                                <ul className="space-y-3 max-h-96 overflow-y-auto">
-                                    {payments.filter(p => p.status === 'unpaid').map(p => { const tenantInfo = tenants.find(t => t.id === p.tenantId); return (<li key={p.id} className="p-3 bg-yellow-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-lg text-yellow-800 font-semibold">{formatCurrency(p.amount)} VNĐ</p><button onClick={() => onUpdatePaymentStatus(p.id, 'paid')} className="mt-2 w-full btn-primary bg-green-500 hover:bg-green-700">Xác Nhận Đã Thanh Toán</button></li>); })}
-                                    {payments.filter(p => p.status === 'unpaid').length === 0 && <p className="text-gray-500">Không có khoản thu nào.</p>}
-                                </ul>
-                            </div>
-                             <div className="bg-white p-6 rounded-lg shadow">
-                                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Tác Vụ Nhanh</h2>
-                                <div className="space-y-3">
-                                    <button onClick={onOpenAddTenantModal} className="w-full btn-primary bg-indigo-500 hover:bg-indigo-700">Thêm Người Thuê Mới</button>
-                                </div>
-                            </div>
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Cần Thu</h2>
+                            <ul className="space-y-3 max-h-96 overflow-y-auto">
+                                {payments.filter(p => p.status === 'unpaid').map(p => { const tenantInfo = tenants.find(t => t.id === p.tenantId); return (<li key={p.id} className="p-3 bg-yellow-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-lg text-yellow-800 font-semibold">{formatCurrency(p.amount)} VNĐ</p><button onClick={() => onUpdatePaymentStatus(p.id, 'paid')} className="mt-2 w-full btn-primary bg-green-500 hover:bg-green-700">Xác Nhận Đã Thanh Toán</button></li>); })}
+                                {payments.filter(p => p.status === 'unpaid').length === 0 && <p className="text-gray-500">Không có khoản thu nào.</p>}
+                            </ul>
                         </div>
                     </div>
                     <BottomSheet 
@@ -702,7 +697,7 @@
             );
         };
 
-        const Header = ({ view, setView, onLogout, userEmail, onToggleSidebar }) => {
+        const Header = ({ view, setView, onLogout, userEmail, onToggleSidebar, onOpenAddTenantModal }) => {
             const navItems = [
                 { id: 'dashboard', label: 'Dashboard' },
                 { id: 'finance', label: 'Tài Chính' },
@@ -712,7 +707,7 @@
 
             return (
                 <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-30">
-                    <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-2 md:gap-8">
                         <button onClick={onToggleSidebar} className="p-2 md:hidden">
                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                         </button>
@@ -723,8 +718,11 @@
                             ))}
                         </nav>
                     </div>
-                    <div className="flex items-center">
-                        <span className="text-gray-700 mr-4 hidden sm:inline">Chào, {userEmail}</span>
+                    <div className="flex items-center gap-2">
+                        <button onClick={onOpenAddTenantModal} className="p-2 md:hidden text-gray-600 hover:text-blue-600">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                        </button>
+                        <span className="text-gray-700 mr-2 hidden sm:inline">Chào, {userEmail}</span>
                         <button onClick={onLogout} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Đăng Xuất</button>
                     </div>
                 </header>
@@ -1075,6 +1073,7 @@
                         onLogout={handleLogout}
                         userEmail={user.email}
                         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                        onOpenAddTenantModal={handleOpenAddTenantModal}
                     />
                     <main>
                         {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenContractModal={handleOpenContractModal} onOpenAddTenantModal={handleOpenAddTenantModal} />}
