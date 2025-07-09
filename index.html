@@ -314,14 +314,14 @@
             );
         };
 
-        const TenantDirectory = ({ allBedsData, tenantsData, buildingsData }) => {
+        const TenantDirectory = ({ allBeds, tenantsData, buildingsData }) => {
             const [openBuildingId, setOpenBuildingId] = useState(null);
 
             const directoryData = useMemo(() => {
                 const tenantsMap = new Map(tenantsData.map(t => [t.id, t]));
                 const buildingsMap = new Map();
 
-                allBedsData.forEach(bed => {
+                allBeds.forEach(bed => {
                     if (!bed.buildingName || !bed.roomName) return;
 
                     if (!buildingsMap.has(bed.buildingName)) {
@@ -353,7 +353,7 @@
                     ...building,
                     rooms: Array.from(building.rooms.values()).sort((a, b) => a.name.localeCompare(b.name))
                 }));
-            }, [allBedsData, tenantsData, buildingsData]);
+            }, [allBeds, tenantsData, buildingsData]);
 
             const toggleBuilding = (buildingId) => {
                 setOpenBuildingId(prevId => (prevId === buildingId ? null : buildingId));
@@ -407,12 +407,23 @@
         };
 
         const FinanceManagement = ({ buildingsData, expensesData, paymentsData, tenantsData, onAddExpense, onDeleteExpense }) => {
-            const [newExpense, setNewExpense] = useState({ description: '', amount: '', buildingId: '', date: new Date().toISOString().slice(0, 10) });
+            const expenseCategories = ["Tiền điện", "Tiền nước", "Tiền Internet", "Sửa chữa", "Phí vệ sinh", "Khác"];
+            const [newExpense, setNewExpense] = useState({ 
+                category: expenseCategories[0], 
+                description: '', 
+                amount: '', 
+                buildingId: '', 
+                date: new Date().toISOString().slice(0, 10) 
+            });
 
             const handleAddExpense = (e) => {
                 e.preventDefault();
-                if (!newExpense.description || !newExpense.amount || !newExpense.buildingId || !newExpense.date) {
+                if (!newExpense.category || !newExpense.amount || !newExpense.buildingId || !newExpense.date) {
                     alert("Vui lòng điền đầy đủ thông tin.");
+                    return;
+                }
+                if (newExpense.category === 'Khác' && !newExpense.description) {
+                    alert("Vui lòng nhập nội dung chi tiết cho mục 'Khác'.");
                     return;
                 }
                 onAddExpense({
@@ -420,7 +431,7 @@
                     amount: parseInt(newExpense.amount, 10),
                     date: Timestamp.fromDate(new Date(newExpense.date))
                 });
-                setNewExpense({ description: '', amount: '', buildingId: '', date: new Date().toISOString().slice(0, 10) });
+                setNewExpense({ category: expenseCategories[0], description: '', amount: '', buildingId: '', date: new Date().toISOString().slice(0, 10) });
             };
 
             const financialSummary = useMemo(() => {
@@ -442,7 +453,6 @@
                 <div className="p-4 md:p-8 space-y-8">
                     <h2 className="text-2xl font-bold text-gray-800">Quản Lý Tài Chính</h2>
                     
-                    {/* Summary Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="p-6 rounded-lg shadow-lg text-white bg-green-500">
                             <p className="text-lg font-semibold">Tổng Doanh Thu</p>
@@ -461,36 +471,42 @@
                         </div>
                     </div>
 
-                    {/* Add Expense Form */}
                     <div className="bg-white p-6 rounded-lg shadow">
                         <h3 className="text-xl font-semibold mb-4">Thêm Chi Phí Mới</h3>
-                        <form onSubmit={handleAddExpense} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700">Nội dung chi</label>
-                                <input type="text" value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} placeholder="VD: Tiền điện tháng 7" className="input-form mt-1" required />
+                        <form onSubmit={handleAddExpense} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Hạng mục chi</label>
+                                <select value={newExpense.category} onChange={e => setNewExpense({...newExpense, category: e.target.value, description: ''})} className="input-form mt-1" required>
+                                    {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                </select>
                             </div>
+                            {newExpense.category === 'Khác' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Mô tả chi tiết</label>
+                                    <input type="text" value={newExpense.description} onChange={e => setNewExpense({...newExpense, description: e.target.value})} placeholder="VD: Mua chổi lau nhà" className="input-form mt-1" required />
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Số tiền (VNĐ)</label>
                                 <input type="number" value={newExpense.amount} onChange={e => setNewExpense({...newExpense, amount: e.target.value})} placeholder="2000000" className="input-form mt-1" required />
                             </div>
-                            <div>
+                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Ngày chi</label>
                                 <input type="date" value={newExpense.date} onChange={e => setNewExpense({...newExpense, date: e.target.value})} className="input-form mt-1" required />
                             </div>
-                            <div className="md:col-span-2">
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700">Cho tòa nhà</label>
                                 <select value={newExpense.buildingId} onChange={e => setNewExpense({...newExpense, buildingId: e.target.value})} className="input-form mt-1" required>
                                     <option value="">-- Chọn tòa nhà --</option>
                                     {buildingsData.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                 </select>
                             </div>
-                            <div className="md:col-span-2">
+                            <div className="lg:col-span-2">
                                 <button type="submit" className="btn-primary w-full">Thêm Chi Phí</button>
                             </div>
                         </form>
                     </div>
 
-                    {/* Transactions List */}
                     <div className="bg-white p-6 rounded-lg shadow">
                         <h3 className="text-xl font-semibold mb-4">Lịch Sử Giao Dịch</h3>
                         <div className="max-h-96 overflow-y-auto">
@@ -498,7 +514,7 @@
                                 {transactions.map(item => (
                                     <li key={item.id} className={`group p-3 rounded-lg flex justify-between items-center ${item.type === 'revenue' ? 'bg-green-50' : 'bg-red-50'}`}>
                                         <div>
-                                            <p className="font-bold">{item.type === 'revenue' ? `Thu từ ${tenantsData.find(t => t.id === item.tenantId)?.name || 'N/A'}` : item.description}</p>
+                                            <p className="font-bold">{item.type === 'revenue' ? `Thu từ ${tenantsData.find(t => t.id === item.tenantId)?.name || 'N/A'}` : (item.category === 'Khác' ? item.description : item.category)}</p>
                                             <p className="text-sm text-gray-500">{formatDate(item.date)} - {item.type === 'expense' ? `Nhà: ${buildingsData.find(b => b.id === item.buildingId)?.name || 'N/A'}` : `Phòng: ${item.roomName}`}</p>
                                         </div>
                                         <div className="text-right">
@@ -1063,7 +1079,7 @@
                     <main>
                         {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenContractModal={handleOpenContractModal} onOpenAddTenantModal={handleOpenAddTenantModal} />}
                         {view === 'finance' && <FinanceManagement tenantsData={tenantsData} buildingsData={buildingsData} expensesData={expensesData} paymentsData={paymentsData} onAddExpense={handleAddExpense} onDeleteExpense={handleDeleteExpense} />}
-                        {view === 'directory' && <TenantDirectory allBedsData={allBedsData} tenantsData={tenantsData} buildingsData={buildingsData} />}
+                        {view === 'directory' && <TenantDirectory allBeds={allBedsData} tenantsData={tenantsData} buildingsData={buildingsData} />}
                         {view === 'management' && <Management onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onOpenAddTenantModal={handleOpenAddTenantModal} onOpenContractModal={handleOpenContractModal} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} onOpenEditTenantModal={handleOpenEditTenantModal} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData}/>}
                     </main>
                     <ConfirmationModal show={confirmModal.show} onClose={() => setConfirmModal({ show: false })} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} />
