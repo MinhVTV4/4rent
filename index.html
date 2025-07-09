@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H4Rent Management</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM for UI -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel to transpile JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase SDKs (Compat version for easier browser usage) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <style>
+        /* Custom styles from the original app */
+        .input-form { 
+            display: block; 
+            width: 100%; 
+            padding: 0.5rem 0.75rem; 
+            font-size: 1rem; 
+            line-height: 1.5; 
+            color: #495057; 
+            background-color: #fff; 
+            background-clip: padding-box; 
+            border: 1px solid #ced4da; 
+            border-radius: 0.375rem; 
+            transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; 
+        }
+        .input-form:focus { 
+            color: #495057; 
+            background-color: #fff; 
+            border-color: #80bdff; 
+            outline: 0; 
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); 
+        }
+        .btn-primary { 
+            color: #fff; 
+            background-color: #007bff; 
+            border-color: #007bff; 
+            padding: 0.5rem 1rem; 
+            font-size: 1rem; 
+            border-radius: 0.375rem; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: background-color 0.2s; 
+        }
+        .btn-primary:hover { 
+            background-color: #0056b3; 
+        }
+        .btn-secondary { 
+            color: #fff; 
+            background-color: #6c757d; 
+            border-color: #6c757d; 
+            padding: 0.25rem 0.5rem; 
+            font-size: 0.875rem; 
+            border-radius: 0.25rem; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: background-color 0.2s; 
+        }
+        .btn-secondary:hover { 
+            background-color: #5a6268; 
+        }
+    </style>
+</head>
+<body>
+    <!-- The root element where the React app will be mounted -->
+    <div id="root"></div>
+
+    <!-- The React application code, transpiled by Babel -->
+    <script type="text/babel">
+        // --- DESTRUCTURE REACT HOOKS FROM GLOBAL React OBJECT ---
+        const { useState, useEffect, useMemo } = React;
+
+        // --- FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCOofbN91yeOEWeAIP6wHgtGBfLZi9qJ1Y",
+            authDomain: "h4rent-c12ef.firebaseapp.com",
+            projectId: "h4rent-c12ef",
+            storageBucket: "h4rent-c12ef.appspot.com",
+            messagingSenderId: "860501720608",
+            appId: "1:860501720608:web:d6a81ae6aeba099c72c645"
+        };
+
+        // --- INITIALIZE FIREBASE USING COMPAT LIBRARIES ---
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const { Timestamp } = firebase.firestore;
+
+        // --- CHILD COMPONENTS ---
+
+        const LoginScreen = ({ onLogin }) => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setError('');
+                try {
+                    // Use compat auth method
+                    await auth.signInWithEmailAndPassword(email, password);
+                } catch (err) {
+                    setError('Email hoặc mật khẩu không đúng. Vui lòng thử lại.');
+                    console.error("Lỗi đăng nhập:", err);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+                        <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">Đăng Nhập Quản Trị</h1>
+                        <form onSubmit={handleLogin}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">Email</label>
+                                <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-form" placeholder="admin@example.com" required />
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">Mật khẩu</label>
+                                <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-form" placeholder="******************" required />
+                            </div>
+                            {error && <p className="text-red-500 text-xs italic mb-4">{error}</p>}
+                            <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full">Đăng Nhập</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const Modal = ({ show, onClose, title, children }) => {
+            if (!show) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                        <div className="p-4 border-b flex justify-between items-center">
+                            <h3 className="text-xl font-semibold">{title}</h3>
+                            <button onClick={onClose} className="text-black text-2xl font-bold">&times;</button>
+                        </div>
+                        <div className="p-4">{children}</div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfirmationModal = ({ show, onClose, onConfirm, title, message }) => {
+            if (!show) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+                            <p className="mt-2 text-sm text-gray-600">{message}</p>
+                        </div>
+                        <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse rounded-b-lg">
+                            <button type="button" onClick={onConfirm} className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">Xóa</button>
+                            <button type="button" onClick={onClose} className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm">Hủy</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const BottomSheet = ({ show, onClose, title, data, type, buildings, tenants }) => {
+            const [activeTab, setActiveTab] = useState('all');
+
+            useEffect(() => {
+                if (show) { setActiveTab('all'); }
+            }, [show]);
+
+            const isBedList = ['available', 'occupied', 'total'].includes(type);
+            const filteredData = useMemo(() => {
+                if (!isBedList || activeTab === 'all') return data;
+                const activeBuilding = buildings.find(b => b.id === activeTab);
+                return data.filter(bed => bed.buildingName === activeBuilding?.name);
+            }, [activeTab, data, isBedList, buildings]);
+            
+            const formatDate = (date) => {
+                if (!date) return 'N/A';
+                const jsDate = date.toDate ? date.toDate() : date;
+                return jsDate.toLocaleDateString('vi-VN');
+            };
+
+            return (
+                <div className={`fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity duration-300 ${show ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose}>
+                    <div className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl transform transition-transform duration-300 ease-out ${show ? 'translate-y-0' : 'translate-y-full'}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="p-4">
+                            <div className="flex justify-between items-center pb-3"><h3 className="text-xl font-semibold">{title}</h3><button onClick={onClose} className="text-gray-500 text-2xl font-bold">&times;</button></div>
+                        </div>
+                        {isBedList && buildings && buildings.length > 0 && (
+                            <div className="border-b border-gray-200 px-4">
+                                <nav className="-mb-px flex space-x-4 overflow-x-auto">
+                                    <button onClick={() => setActiveTab('all')} className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Tất cả</button>
+                                    {buildings.map(b => (<button key={b.id} onClick={() => setActiveTab(b.id)} className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === b.id ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>{b.name}</button>))}
+                                </nav>
+                            </div>
+                        )}
+                        <div className="p-4 max-h-[60vh] overflow-y-auto">
+                            <ul className="space-y-3">
+                                {type === 'expiring' ? filteredData.map(c => { const tenantInfo = tenants.find(t => t.id === c.tenantId); return (<li key={c.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-sm text-gray-600">Hết hạn: {formatDate(c.endDate)}</p></li>)}) : filteredData.map(bed => { const tenantInfo = bed.tenantId ? tenants.find(t => t.id === bed.tenantId) : null; return (<li key={bed.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{bed.name}</p><p className="text-sm text-gray-600">{bed.buildingName || 'Chưa rõ'} - {bed.roomName || 'Chưa rõ'}</p>{tenantInfo && <p className="text-sm text-blue-600">Người thuê: {tenantInfo.name}</p>}</li>)})}
+                                {filteredData.length === 0 && <p className="text-gray-500 text-center py-4">Không có dữ liệu.</p>}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const StatCard = ({ title, value, subtext, colorClass, onClick }) => (
+            <div className={`p-6 rounded-lg shadow-lg text-white ${colorClass} cursor-pointer hover:opacity-90 transition-opacity`} onClick={onClick}>
+                <p className="text-lg font-semibold">{title}</p><p className="text-4xl font-bold">{value}</p><p className="text-sm opacity-80">{subtext}</p>
+            </div>
+        );
+
+        const Dashboard = ({ allBeds, tenants, contracts, payments, buildingsData, onUpdatePaymentStatus }) => {
+            const [bottomSheet, setBottomSheet] = useState({ show: false, title: '', data: [], type: '' });
+
+            const stats = useMemo(() => {
+                const totalBeds = allBeds.length;
+                const occupiedBeds = allBeds.filter(b => b.status === 'occupied').length;
+                const availableBeds = totalBeds - occupiedBeds;
+                const occupancyRate = totalBeds > 0 ? ((occupiedBeds / totalBeds) * 100).toFixed(1) : 0;
+                return { totalBeds, occupiedBeds, availableBeds, occupancyRate };
+            }, [allBeds]);
+
+            const expiringContracts = useMemo(() => {
+                const now = new Date();
+                const thirtyDaysFromNow = new Date();
+                thirtyDaysFromNow.setDate(now.getDate() + 30);
+                return contracts.map(c => { 
+                    const startDate = c.startDate.toDate(); 
+                    const endDate = new Date(startDate); 
+                    endDate.setMonth(startDate.getMonth() + parseInt(c.paymentCycle)); 
+                    return { ...c, endDate }; 
+                }).filter(c => c.endDate > now && c.endDate <= thirtyDaysFromNow);
+            }, [contracts]);
+
+            const handleStatCardClick = (type) => {
+                let title = ''; let data = [];
+                switch (type) {
+                    case 'total': title = 'Tất cả các giường'; data = allBeds; break;
+                    case 'occupied': title = 'Giường đã thuê'; data = allBeds.filter(b => b.status === 'occupied'); break;
+                    case 'available': title = 'Giường còn trống'; data = allBeds.filter(b => b.status === 'available'); break;
+                    case 'expiring': title = 'Hợp đồng sắp hết hạn'; data = expiringContracts; break;
+                    default: return;
+                }
+                setBottomSheet({ show: true, title, data, type });
+            };
+
+            return (
+                <>
+                    <div className="p-4 md:p-8 space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <StatCard title="Tổng số giường" value={stats.totalBeds} subtext="Trên toàn hệ thống" colorClass="bg-blue-500" onClick={() => handleStatCardClick('total')} />
+                            <StatCard title="Giường đã thuê" value={stats.occupiedBeds} subtext={`${stats.occupancyRate}% lấp đầy`} colorClass="bg-green-500" onClick={() => handleStatCardClick('occupied')} />
+                            <StatCard title="Giường còn trống" value={stats.availableBeds} subtext="Sẵn sàng cho thuê" colorClass="bg-yellow-500" onClick={() => handleStatCardClick('available')} />
+                            <StatCard title="Hợp đồng sắp hết hạn" value={expiringContracts.length} subtext="Trong 30 ngày tới" colorClass="bg-red-500" onClick={() => handleStatCardClick('expiring')} />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Cần Thu</h2>
+                                <ul className="space-y-3 max-h-96 overflow-y-auto">
+                                    {payments.filter(p => p.status === 'unpaid').map(p => { const tenantInfo = tenants.find(t => t.id === p.tenantId); return (<li key={p.id} className="p-3 bg-yellow-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-lg text-yellow-800 font-semibold">{new Intl.NumberFormat('vi-VN').format(p.amount)} VNĐ</p><button onClick={() => onUpdatePaymentStatus(p.id, 'paid')} className="mt-2 w-full btn-primary bg-green-500 hover:bg-green-700">Xác Nhận Đã Thanh Toán</button></li>); })}
+                                    {payments.filter(p => p.status === 'unpaid').length === 0 && <p className="text-gray-500">Không có khoản thu nào.</p>}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <BottomSheet show={bottomSheet.show} onClose={() => setBottomSheet({ ...bottomSheet, show: false })} title={bottomSheet.title} data={bottomSheet.data} type={bottomSheet.type} buildings={buildingsData} tenants={tenants} />
+                </>
+            );
+        };
+
+        const EditableListItem = ({ item, onUpdate, onDelete, isSelected, onClick, children }) => {
+            const [isEditing, setIsEditing] = useState(false);
+            const [name, setName] = useState(item.name);
+
+            const handleSave = () => {
+                if (name.trim() !== '' && name.trim() !== item.name) {
+                    onUpdate(item.id, name.trim());
+                }
+                setIsEditing(false);
+            };
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') handleSave();
+                if (e.key === 'Escape') {
+                    setName(item.name);
+                    setIsEditing(false);
+                }
+            };
+
+            return (
+                <li onClick={onClick} className={`group p-2 rounded cursor-pointer transition-all flex justify-between items-center ${isSelected ? 'bg-blue-500 text-white shadow-lg' : 'bg-gray-100 hover:bg-blue-100'}`}>
+                    {isEditing ? (
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} autoFocus className="input-form text-black p-1 flex-grow"/>
+                    ) : (
+                        <span className="flex-grow">{item.name}</span>
+                    )}
+                    <div className="hidden group-hover:flex items-center gap-2 pl-2">
+                        <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="text-sm text-blue-600 hover:text-blue-800">Sửa</button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(item); }} className="text-sm text-red-600 hover:text-red-800">Xóa</button>
+                    </div>
+                    {children}
+                </li>
+            );
+        };
+
+        const Management = ({ 
+            allBedsData, buildingsData, tenantsData, paymentsData, 
+            onAddBuilding, onAddRoom, onAddBed, onAddTenant, onCreateContract,
+            onUpdateItem, onDeleteItem, onUpdateTenant, onDeletePayment,
+            newBuildingName, setNewBuildingName,
+            newRoomName, setNewRoomName,
+            newBedName, setNewBedName
+        }) => {
+            const [selectedBuilding, setSelectedBuilding] = useState(null);
+            const [selectedRoom, setSelectedRoom] = useState(null);
+            
+            const [showAddTenantModal, setShowAddTenantModal] = useState(false);
+            const [newTenant, setNewTenant] = useState({ name: '', phone: '', idCard: '', school: '' });
+            
+            const [showEditTenantModal, setShowEditTenantModal] = useState(false);
+            const [editingTenant, setEditingTenant] = useState(null);
+
+            const [showContractModal, setShowContractModal] = useState(false);
+            const [contractData, setContractData] = useState({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' });
+
+            const useSubCollection = (parentCollection, parentId, subCollectionName) => {
+                const [data, setData] = useState([]);
+                useEffect(() => {
+                    if (!parentId) { setData([]); return; }
+                    const q = db.collection(parentCollection).doc(parentId).collection(subCollectionName);
+                    const unsubscribe = q.onSnapshot((querySnapshot) => {
+                        const items = [];
+                        querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                        setData(items);
+                    });
+                    return () => unsubscribe();
+                }, [parentId, subCollectionName]);
+                return data;
+            };
+
+            const roomsData = useSubCollection('buildings', selectedBuilding?.id, 'rooms');
+            const bedsData = useSubCollection('rooms', selectedRoom?.id, 'beds');
+
+            // Lọc ra những người thuê chưa có giường
+            const availableTenants = useMemo(() => {
+                const occupiedTenantIds = new Set(
+                    allBedsData
+                        .filter(bed => bed.status === 'occupied' && bed.tenantId)
+                        .map(bed => bed.tenantId)
+                );
+                return tenantsData.filter(tenant => !occupiedTenantIds.has(tenant.id));
+            }, [tenantsData, allBedsData]);
+
+            const handleAddTenantInternal = (e) => { e.preventDefault(); onAddTenant(newTenant); setNewTenant({ name: '', phone: '', idCard: '', school: '' }); setShowAddTenantModal(false); };
+            const handleEditTenantInternal = (e) => { e.preventDefault(); onUpdateTenant(editingTenant.id, editingTenant); setEditingTenant(null); setShowEditTenantModal(false); };
+            const handleCreateContractInternal = (e) => { e.preventDefault(); onCreateContract({ ...contractData, buildingId: selectedBuilding.id, roomId: selectedRoom.id, buildingName: selectedBuilding.name, roomName: selectedRoom.name }); setShowContractModal(false); setContractData({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' }); };
+            const handleAddBedInternal = (e) => { e.preventDefault(); if(!selectedRoom || !selectedBuilding) return; onAddBed(e, selectedRoom.id, selectedBuilding.name, selectedRoom.name); }
+
+            const openEditTenantModal = (tenant) => {
+                setEditingTenant(tenant);
+                setShowEditTenantModal(true);
+            };
+
+            return (
+                <div className="p-4 md:p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow">
+                            <h2 className="text-xl font-semibold mb-4 border-b pb-2">Sơ Đồ Quản Lý</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <h3 className="font-bold text-lg mb-2">1. Căn Nhà</h3>
+                                    <form onSubmit={onAddBuilding} className="flex gap-2 mb-4"><input type="text" value={newBuildingName} onChange={e => setNewBuildingName(e.target.value)} placeholder="Tên nhà mới" className="input-form flex-grow"/><button type="submit" className="btn-primary">+</button></form>
+                                    <ul className="space-y-2">{buildingsData.map(b => (<EditableListItem key={b.id} item={b} onUpdate={(id, name) => onUpdateItem('buildings', id, name)} onDelete={(item) => onDeleteItem('building', item)} isSelected={selectedBuilding?.id === b.id} onClick={() => { setSelectedBuilding(b); setSelectedRoom(null); }} />))}</ul>
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg mb-2">2. Phòng</h3>
+                                    {selectedBuilding && (<>
+                                        <form onSubmit={(e) => onAddRoom(e, selectedBuilding.id)} className="flex gap-2 mb-4"><input type="text" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="Tên phòng mới" className="input-form flex-grow"/><button type="submit" className="btn-primary">+</button></form>
+                                        <ul className="space-y-2">{roomsData.map(r => (<EditableListItem key={r.id} item={r} onUpdate={(id, name) => onUpdateItem(`buildings/${selectedBuilding.id}/rooms`, id, name)} onDelete={(item) => onDeleteItem('room', item, selectedBuilding.id)} isSelected={selectedRoom?.id === r.id} onClick={() => setSelectedRoom(r)} />))}</ul>
+                                    </>)}
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg mb-2">3. Giường</h3>
+                                    {selectedRoom && (<>
+                                        <form onSubmit={handleAddBedInternal} className="flex gap-2 mb-4"><input type="text" value={newBedName} onChange={e => setNewBedName(e.target.value)} placeholder="Tên giường mới" className="input-form flex-grow"/><button type="submit" className="btn-primary">+</button></form>
+                                        <ul className="space-y-2">{bedsData.map(bed => (<EditableListItem key={bed.id} item={bed} onUpdate={(id, name) => onUpdateItem(`rooms/${selectedRoom.id}/beds`, id, name)} onDelete={(item) => onDeleteItem('bed', item, selectedRoom.id)}>
+                                            {bed.status === 'available' ? <button onClick={(e) => { e.stopPropagation(); setContractData({...contractData, bedId: bed.id }); setShowContractModal(true); }} className="btn-secondary text-xs ml-auto">Tạo HĐ</button> : <span className="text-xs font-semibold text-red-700 ml-auto">Đã thuê</span>}
+                                        </EditableListItem>))}</ul>
+                                    </>)}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-8">
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <div className="flex justify-between items-center mb-4 border-b pb-2"><h2 className="text-xl font-semibold">Người Thuê</h2><button onClick={() => setShowAddTenantModal(true)} className="btn-primary">Thêm Người Thuê</button></div>
+                                <ul className="space-y-2 max-h-60 overflow-y-auto">{tenantsData.map(t => (<li key={t.id} className="group p-2 bg-gray-50 rounded flex justify-between items-center"><div className="flex-grow"><p className="font-bold">{t.name}</p><p className="text-sm text-gray-600">{t.phone} - {t.school}</p></div><div className="hidden group-hover:flex items-center gap-2 pl-2"><button onClick={() => openEditTenantModal(t)} className="text-sm text-blue-600 hover:text-blue-800">Sửa</button><button onClick={() => onDeleteItem('tenant', t)} className="text-sm text-red-600 hover:text-red-800">Xóa</button></div></li>))}</ul>
+                            </div>
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h2 className="text-xl font-semibold mb-4 border-b pb-2">Các Khoản Đã Thanh Toán</h2>
+                                <ul className="space-y-3 max-h-80 overflow-y-auto">{paymentsData.filter(p => p.status === 'paid').map(p => { const tenantInfo = tenantsData.find(t => t.id === p.tenantId); return (<li key={p.id} className="group p-3 bg-green-100 rounded-lg opacity-70 flex justify-between items-center"><div className="flex-grow"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-md text-green-800 font-semibold">{new Intl.NumberFormat('vi-VN').format(p.amount)} VNĐ</p></div><button onClick={() => onDeletePayment(p.id)} className="hidden group-hover:block text-sm text-red-600 hover:text-red-800 ml-2">Xóa</button></li>);})}{paymentsData.filter(p => p.status === 'paid').length === 0 && <p className="text-gray-500">Chưa có thanh toán nào.</p>}</ul>
+                            </div>
+                        </div>
+                    </div>
+                    <Modal show={showAddTenantModal} onClose={() => setShowAddTenantModal(false)} title="Thêm Người Thuê Mới"><form onSubmit={handleAddTenantInternal}><div className="space-y-4"><input value={newTenant.name} onChange={e => setNewTenant({...newTenant, name: e.target.value})} placeholder="Họ và Tên" className="input-form w-full" required/><input value={newTenant.phone} onChange={e => setNewTenant({...newTenant, phone: e.target.value})} placeholder="Số điện thoại" className="input-form w-full" required/><input value={newTenant.idCard} onChange={e => setNewTenant({...newTenant, idCard: e.target.value})} placeholder="Số CCCD" className="input-form w-full"/><input value={newTenant.school} onChange={e => setNewTenant({...newTenant, school: e.target.value})} placeholder="Trường học/Nơi làm việc" className="input-form w-full"/><button type="submit" className="btn-primary w-full">Lưu</button></div></form></Modal>
+                    {editingTenant && <Modal show={showEditTenantModal} onClose={() => setShowEditTenantModal(false)} title="Sửa Thông Tin Người Thuê"><form onSubmit={handleEditTenantInternal}><div className="space-y-4"><input value={editingTenant.name} onChange={e => setEditingTenant({...editingTenant, name: e.target.value})} placeholder="Họ và Tên" className="input-form w-full" required/><input value={editingTenant.phone} onChange={e => setEditingTenant({...editingTenant, phone: e.target.value})} placeholder="Số điện thoại" className="input-form w-full" required/><input value={editingTenant.idCard} onChange={e => setEditingTenant({...editingTenant, idCard: e.target.value})} placeholder="Số CCCD" className="input-form w-full"/><input value={editingTenant.school} onChange={e => setEditingTenant({...editingTenant, school: e.target.value})} placeholder="Trường học/Nơi làm việc" className="input-form w-full"/><button type="submit" className="btn-primary w-full">Cập Nhật</button></div></form></Modal>}
+                    <Modal show={showContractModal} onClose={() => setShowContractModal(false)} title="Tạo Hợp Đồng Mới"><form onSubmit={handleCreateContractInternal}><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700">Chọn người thuê</label><select value={contractData.tenantId} onChange={e => setContractData({...contractData, tenantId: e.target.value})} className="input-form w-full" required><option value="">-- Chọn --</option>{availableTenants.length > 0 ? availableTenants.map(t => <option key={t.id} value={t.id}>{t.name} - {t.phone}</option>) : <option disabled>Không có người thuê nào trống</option>}</select></div><div><label className="block text-sm font-medium text-gray-700">Giá thuê 1 tháng (VNĐ)</label><input type="number" value={contractData.rentPrice} onChange={e => setContractData({...contractData, rentPrice: e.target.value})} className="input-form w-full"/></div><div><label className="block text-sm font-medium text-gray-700">Kỳ thanh toán</label><select value={contractData.paymentCycle} onChange={e => setContractData({...contractData, paymentCycle: e.target.value})} className="input-form w-full"><option value="3">3 Tháng</option><option value="6">6 Tháng</option></select></div><div className="p-4 bg-blue-50 rounded-lg text-center"><p className="text-gray-600">Tổng tiền cho kỳ đầu tiên:</p><p className="text-2xl font-bold text-blue-700">{new Intl.NumberFormat('vi-VN').format(parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle))} VNĐ</p></div><button type="submit" className="btn-primary w-full">Xác Nhận Tạo Hợp Đồng</button></div></form></Modal>
+                </div>
+            );
+        };
+
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [view, setView] = useState('dashboard');
+            const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: () => {} });
+
+            const [newBuildingName, setNewBuildingName] = useState('');
+            const [newRoomName, setNewRoomName] = useState('');
+            const [newBedName, setNewBedName] = useState('');
+
+            const useCollection = (collectionName) => {
+                const [data, setData] = useState([]);
+                useEffect(() => {
+                    if (!user) { setData([]); return; }
+                    const q = db.collection(collectionName);
+                    const unsubscribe = q.onSnapshot((querySnapshot) => {
+                        const items = [];
+                        querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                        setData(items);
+                    });
+                    return () => unsubscribe();
+                }, [user, collectionName]);
+                return data;
+            };
+
+            const useCollectionGroup = (collectionId) => {
+                const [data, setData] = useState([]);
+                useEffect(() => {
+                    if (!user) { setData([]); return; }
+                    const q = db.collectionGroup(collectionId);
+                    const unsubscribe = q.onSnapshot((querySnapshot) => {
+                        const items = [];
+                        querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                        setData(items);
+                    });
+                    return () => unsubscribe();
+                }, [user, collectionId]);
+                return data;
+            };
+            
+            const buildingsData = useCollection('buildings');
+            const tenantsData = useCollection('tenants');
+            const paymentsData = useCollection('payments');
+            const contractsData = useCollection('contracts');
+            const allBedsData = useCollectionGroup('beds');
+
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+                    setUser(currentUser);
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            const handleUpdateItem = async (path, id, newName) => {
+                const itemRef = db.doc(`${path}/${id}`);
+                await itemRef.update({ name: newName });
+            };
+            
+            const handleUpdateTenant = async (tenantId, updatedData) => {
+                const tenantRef = db.collection('tenants').doc(tenantId);
+                await tenantRef.update(updatedData);
+            };
+
+            const handleDeletePayment = (paymentId) => {
+                const onConfirm = async () => {
+                    await db.collection('payments').doc(paymentId).delete();
+                    setConfirmModal({ show: false });
+                };
+                setConfirmModal({ show: true, title: 'Xác nhận xóa thanh toán', message: 'Bạn có chắc chắn muốn xóa khoản thanh toán này?', onConfirm });
+            };
+
+            const handleDeleteItem = (type, item, parentId = null) => {
+                const onConfirm = async () => {
+                    try {
+                        if (type === 'bed') {
+                            if (item.status === 'occupied') { alert('Không thể xóa giường đã có người thuê.'); return; }
+                            await db.doc(`rooms/${parentId}/beds/${item.id}`).delete();
+                        } else if (type === 'room') {
+                            const batch = db.batch();
+                            const roomRef = db.doc(`buildings/${parentId}/rooms/${item.id}`);
+                            const bedsQuery = db.collection(`rooms/${item.id}/beds`);
+                            const bedsSnapshot = await bedsQuery.get();
+                            bedsSnapshot.forEach(bedDoc => batch.delete(bedDoc.ref));
+                            batch.delete(roomRef);
+                            await batch.commit();
+                        } else if (type === 'building') {
+                            const batch = db.batch();
+                            const buildingRef = db.collection('buildings').doc(item.id);
+                            const roomsQuery = db.collection(`buildings/${item.id}/rooms`);
+                            const roomsSnapshot = await roomsQuery.get();
+                            for (const roomDoc of roomsSnapshot.docs) {
+                                const bedsQuery = db.collection(`rooms/${roomDoc.id}/beds`);
+                                const bedsSnapshot = await bedsQuery.get();
+                                bedsSnapshot.forEach(bedDoc => batch.delete(bedDoc.ref));
+                                batch.delete(roomDoc.ref);
+                            }
+                            batch.delete(buildingRef);
+                            await batch.commit();
+                        } else if (type === 'tenant') {
+                            const bedsQuery = db.collectionGroup('beds').where('tenantId', '==', item.id);
+                            const bedsSnapshot = await bedsQuery.get();
+                            if (!bedsSnapshot.empty) {
+                                alert('Không thể xóa người thuê đang có hợp đồng. Vui lòng kết thúc hợp đồng trước.');
+                                return;
+                            }
+                            await db.collection('tenants').doc(item.id).delete();
+                        }
+                    } catch (error) {
+                        console.error("Lỗi khi xóa:", error);
+                        alert("Đã có lỗi xảy ra khi xóa.");
+                    } finally {
+                        setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                    }
+                };
+                setConfirmModal({ show: true, title: `Xác nhận xóa`, message: `Bạn có chắc chắn muốn xóa "${item.name}"? Hành động này không thể hoàn tác.`, onConfirm });
+            };
+
+            const handleAddBuilding = async (e) => { e.preventDefault(); if (newBuildingName.trim() === '') return; await db.collection('buildings').add({ name: newBuildingName, createdAt: Timestamp.now() }); setNewBuildingName(''); };
+            const handleAddRoom = async (e, buildingId) => { e.preventDefault(); if (newRoomName.trim() === '' || !buildingId) return; await db.collection('buildings').doc(buildingId).collection('rooms').add({ name: newRoomName, createdAt: Timestamp.now() }); setNewRoomName(''); };
+            const handleAddBed = async (e, roomId, buildingName, roomName) => { e.preventDefault(); if (newBedName.trim() === '' || !roomId) return; await db.collection('rooms').doc(roomId).collection('beds').add({ name: newBedName, status: 'available', tenantId: null, createdAt: Timestamp.now(), buildingName: buildingName, roomName: roomName }); setNewBedName(''); };
+            const handleAddTenant = async (tenantData) => { if (tenantData.name.trim() === '' || tenantData.phone.trim() === '') return; await db.collection('tenants').add(tenantData); };
+            const handleCreateContract = async (contractData) => { if(!contractData.tenantId || !contractData.bedId) { alert("Vui lòng chọn người thuê!"); return; } try { const contractRef = await db.collection('contracts').add({ ...contractData, startDate: Timestamp.now() }); const amount = parseInt(contractData.rentPrice) * parseInt(contractData.paymentCycle); await db.collection('payments').add({ contractId: contractRef.id, tenantId: contractData.tenantId, amount: amount, dueDate: Timestamp.now(), status: 'unpaid' }); const bedRef = db.doc(`rooms/${contractData.roomId}/beds/${contractData.bedId}`); await bedRef.update({ status: 'occupied', tenantId: contractData.tenantId }); } catch (error) { console.error("Lỗi tạo hợp đồng:", error); alert("Đã có lỗi xảy ra khi tạo hợp đồng."); }};
+            const handleUpdatePaymentStatus = async (paymentId, newStatus) => { const paymentRef = db.collection('payments').doc(paymentId); await paymentRef.update({ status: newStatus }); };
+            const handleLogout = () => { auth.signOut(); };
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center">Đang tải...</div>;
+            if (!user) return <LoginScreen />;
+
+            return (
+                <div className="bg-gray-50 min-h-screen">
+                    <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
+                        <div className="flex items-center gap-8"><h1 className="text-2xl font-bold text-blue-600">H4Rent</h1><nav className="flex gap-4"><button onClick={() => setView('dashboard')} className={`pb-1 font-semibold ${view === 'dashboard' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Dashboard</button><button onClick={() => setView('management')} className={`pb-1 font-semibold ${view === 'management' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>Quản Lý Chi Tiết</button></nav></div>
+                        <div><span className="text-gray-700 mr-4">Chào, {user.email}</span><button onClick={handleLogout} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Đăng Xuất</button></div>
+                    </header>
+                    <main>
+                        {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus}/>}
+                        {view === 'management' && <Management allBedsData={allBedsData} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData} onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onAddTenant={handleAddTenant} onCreateContract={handleCreateContract} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName}/>}
+                    </main>
+                    <ConfirmationModal show={confirmModal.show} onClose={() => setConfirmModal({ show: false })} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} />
+                </div>
+            );
+        };
+
+        // --- RENDER THE APP TO THE DOM USING REACT 18 API ---
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
