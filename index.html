@@ -15,6 +15,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* Custom styles from the original app */
         .input-form { 
@@ -74,7 +76,7 @@
     <!-- The React application code, transpiled by Babel -->
     <script type="text/babel">
         // --- DESTRUCTURE REACT HOOKS FROM GLOBAL React OBJECT ---
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // --- FIREBASE CONFIGURATION ---
         const firebaseConfig = {
@@ -100,7 +102,133 @@
             return jsDate.toLocaleDateString('vi-VN');
         };
 
-        // --- CHILD COMPONENTS ---
+        // --- CHART COMPONENTS ---
+        const FinanceColumnChart = ({ chartData }) => {
+            const chartRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+
+            useEffect(() => {
+                if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy();
+                }
+                if (!chartRef.current || !chartData) return;
+
+                const myChartRef = chartRef.current.getContext("2d");
+                
+                chartInstanceRef.current = new Chart(myChartRef, {
+                    type: "bar",
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [
+                            {
+                                label: "Doanh thu",
+                                data: chartData.revenueData,
+                                backgroundColor: "rgba(54, 162, 235, 0.6)",
+                                borderColor: "rgba(54, 162, 235, 1)",
+                                borderWidth: 1,
+                            },
+                            {
+                                label: "Chi phí",
+                                data: chartData.expenseData,
+                                backgroundColor: "rgba(255, 99, 132, 0.6)",
+                                borderColor: "rgba(255, 99, 132, 1)",
+                                borderWidth: 1,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return formatCurrency(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstanceRef.current) {
+                        chartInstanceRef.current.destroy();
+                    }
+                }
+            }, [chartData]);
+
+            return <div style={{height: '300px'}}><canvas ref={chartRef} /></div>;
+        };
+
+        const ExpensePieChart = ({ chartData }) => {
+            const chartRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+
+            useEffect(() => {
+                if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy();
+                }
+                 if (!chartRef.current || !chartData || chartData.data.length === 0) return;
+
+                const myChartRef = chartRef.current.getContext("2d");
+                
+                chartInstanceRef.current = new Chart(myChartRef, {
+                    type: "pie",
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            data: chartData.data,
+                             backgroundColor: [
+                                'rgba(255, 99, 132, 0.8)',
+                                'rgba(54, 162, 235, 0.8)',
+                                'rgba(255, 206, 86, 0.8)',
+                                'rgba(75, 192, 192, 0.8)',
+                                'rgba(153, 102, 255, 0.8)',
+                                'rgba(255, 159, 64, 0.8)'
+                            ],
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += formatCurrency(context.parsed) + ' VNĐ';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstanceRef.current) {
+                        chartInstanceRef.current.destroy();
+                    }
+                }
+            }, [chartData]);
+
+            return <div style={{height: '300px'}}><canvas ref={chartRef} /></div>;
+        };
+
+
+        // --- MAIN UI COMPONENTS ---
 
         const LoginScreen = ({ onLogin }) => {
             const [email, setEmail] = useState('');
@@ -119,7 +247,7 @@
             };
 
             return (
-                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
                     <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
                         <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">Đăng Nhập Quản Trị</h1>
                         <form onSubmit={handleLogin}>
@@ -131,7 +259,11 @@
                                 <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">Mật khẩu</label>
                                 <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-form" placeholder="******************" required />
                             </div>
-                            {error && <p className="text-red-500 text-xs italic mb-4">{error}</p>}
+                            {error && (
+                                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                                    <span className="block sm:inline">{error}</span>
+                                </div>
+                            )}
                             <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full">Đăng Nhập</button>
                         </form>
                     </div>
@@ -172,71 +304,93 @@
             );
         };
 
-        const BottomSheet = ({ show, onClose, title, data, type, buildings, tenants, onOpenContractModal }) => {
-            const [activeTab, setActiveTab] = useState('all');
+        const BottomSheet = ({ show, onClose, title, data, type, onOpenContractModal }) => {
+            const [openBuildingName, setOpenBuildingName] = useState(null);
 
-            useEffect(() => {
-                if (show) { setActiveTab('all'); }
-            }, [show]);
+            const toggleBuilding = (buildingName) => {
+                setOpenBuildingName(prev => (prev === buildingName ? null : buildingName));
+            };
 
             const isBedList = ['available', 'occupied', 'total'].includes(type);
-            const filteredData = useMemo(() => {
-                if (!isBedList || activeTab === 'all') return data;
-                const activeBuilding = buildings.find(b => b.id === activeTab);
-                return data.filter(bed => bed.buildingName === activeBuilding?.name);
-            }, [activeTab, data, isBedList, buildings]);
-            
+
+            const groupedData = useMemo(() => {
+                if (!isBedList) return [];
+                const groups = data.reduce((acc, item) => {
+                    const key = item.buildingName || 'Chưa xác định';
+                    if (!acc[key]) {
+                        acc[key] = [];
+                    }
+                    acc[key].push(item);
+                    return acc;
+                }, {});
+                return Object.entries(groups).map(([buildingName, items]) => ({
+                    buildingName,
+                    items
+                }));
+            }, [data, isBedList]);
+
             return (
                 <div className={`fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity duration-300 ${show ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose}>
                     <div className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl transform transition-transform duration-300 ease-out ${show ? 'translate-y-0' : 'translate-y-full'}`} onClick={(e) => e.stopPropagation()}>
-                        <div className="p-4">
-                            <div className="flex justify-between items-center pb-3"><h3 className="text-xl font-semibold">{title}</h3><button onClick={onClose} className="text-gray-500 text-2xl font-bold">&times;</button></div>
+                        <div className="p-4 border-b">
+                            <div className="flex justify-between items-center"><h3 className="text-xl font-semibold">{title}</h3><button onClick={onClose} className="text-gray-500 text-2xl font-bold">&times;</button></div>
                         </div>
-                        {isBedList && buildings && buildings.length > 0 && (
-                            <div className="border-b border-gray-200 px-4">
-                                <nav className="-mb-px flex space-x-4 overflow-x-auto">
-                                    <button onClick={() => setActiveTab('all')} className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>Tất cả</button>
-                                    {buildings.map(b => (<button key={b.id} onClick={() => setActiveTab(b.id)} className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === b.id ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>{b.name}</button>))}
-                                </nav>
-                            </div>
-                        )}
                         <div className="p-4 max-h-[60vh] overflow-y-auto">
-                            <ul className="space-y-3">
-                                {type === 'expiring' 
-                                 ? filteredData.map(c => { 
-                                     const tenantInfo = tenants.find(t => t.id === c.tenantId); 
-                                     return (<li key={c.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-sm text-gray-600">Hết hạn: {formatDate(c.endDate)}</p></li>)
-                                   }) 
-                                 : filteredData.map(bed => {
-                                     const tenantInfo = bed.tenantId ? tenants.find(t => t.id === bed.tenantId) : null;
-                                     return (
-                                        <li key={bed.id} className="p-3 bg-gray-100 rounded-lg flex justify-between items-center">
-                                            <div>
-                                                <p className="font-bold">{bed.name}</p>
-                                                <p className="text-sm text-gray-600">{bed.buildingName || 'Chưa rõ'} - {bed.roomName || 'Chưa rõ'}</p>
-                                                {tenantInfo && <p className="text-sm text-blue-600">Người thuê: {tenantInfo.name}</p>}
-                                            </div>
-                                            {type === 'available' && (
-                                                <button onClick={() => onOpenContractModal(bed)} className="btn-secondary text-xs">Tạo HĐ</button>
+                            {isBedList ? (
+                                <div className="space-y-2">
+                                    {groupedData.map(group => (
+                                        <div key={group.buildingName} className="border rounded-lg overflow-hidden">
+                                            <button onClick={() => toggleBuilding(group.buildingName)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 focus:outline-none flex justify-between items-center transition">
+                                                <h4 className="font-bold text-lg text-gray-800">{group.buildingName} ({group.items.length})</h4>
+                                                <span className={`transform transition-transform duration-300 ${openBuildingName === group.buildingName ? 'rotate-180' : ''}`}>
+                                                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                </span>
+                                            </button>
+                                            {openBuildingName === group.buildingName && (
+                                                <ul className="space-y-2 mt-2 p-3 border-t">
+                                                    {group.items.map(item => (
+                                                        <li key={item.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+                                                            <div>
+                                                                <p className="font-bold">{item.name}</p>
+                                                                <p className="text-sm text-gray-600">{item.roomName || 'Phòng không xác định'}</p>
+                                                            </div>
+                                                            {type === 'available' && (
+                                                                <button onClick={() => onOpenContractModal(item)} className="btn-secondary text-xs">Tạo HĐ</button>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             )}
-                                        </li>
-                                    )
-                                  })
-                                }
-                                {filteredData.length === 0 && <p className="text-gray-500 text-center py-4">Không có dữ liệu.</p>}
-                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <ul className="space-y-3">
+                                    {data.map(c => { 
+                                        const tenantInfo = tenants.find(t => t.id === c.tenantId); 
+                                        return (<li key={c.id} className="p-3 bg-gray-100 rounded-lg"><p className="font-bold">{tenantInfo?.name || 'Không rõ'}</p><p className="text-sm text-gray-600">Hết hạn: {formatDate(c.endDate)}</p></li>)
+                                    })}
+                                </ul>
+                            )}
+                            {data.length === 0 && <p className="text-gray-500 text-center py-4">Không có dữ liệu.</p>}
                         </div>
                     </div>
                 </div>
             );
         };
 
-        const StatCard = ({ title, value, subtext, colorClass, onClick }) => (
+        const StatCard = ({ title, value, subtext, colorClass, onClick, children }) => (
             <div 
-                className={`p-6 rounded-lg shadow-lg text-white ${colorClass} cursor-pointer transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl`} 
+                className={`p-6 rounded-lg shadow-lg text-white ${colorClass} transition-all duration-300 ease-in-out ${onClick ? 'cursor-pointer hover:scale-105 hover:shadow-xl' : ''}`} 
                 onClick={onClick}
             >
-                <p className="text-lg font-semibold">{title}</p><p className="text-4xl font-bold">{value}</p><p className="text-sm opacity-80">{subtext}</p>
+                {children ? children : (
+                    <>
+                        <p className="text-lg font-semibold">{title}</p>
+                        <p className="text-4xl font-bold">{value}</p>
+                        <p className="text-sm opacity-80">{subtext}</p>
+                    </>
+                )}
             </div>
         );
 
@@ -244,12 +398,12 @@
             const [bottomSheet, setBottomSheet] = useState({ show: false, title: '', data: [], type: '' });
 
             const stats = useMemo(() => {
+                const totalBuildings = buildingsData.length;
                 const totalBeds = allBeds.length;
                 const occupiedBeds = allBeds.filter(b => b.status === 'occupied').length;
                 const availableBeds = totalBeds - occupiedBeds;
-                const occupancyRate = totalBeds > 0 ? ((occupiedBeds / totalBeds) * 100).toFixed(1) : 0;
-                return { totalBeds, occupiedBeds, availableBeds, occupancyRate };
-            }, [allBeds]);
+                return { totalBuildings, totalBeds, occupiedBeds, availableBeds };
+            }, [allBeds, buildingsData]);
 
             const expiringContracts = useMemo(() => {
                 const now = new Date();
@@ -266,7 +420,6 @@
             const handleStatCardClick = (type) => {
                 let title = ''; let data = [];
                 switch (type) {
-                    case 'total': title = 'Tất cả các giường'; data = allBeds; break;
                     case 'occupied': title = 'Giường đã thuê'; data = allBeds.filter(b => b.status === 'occupied'); break;
                     case 'available': title = 'Giường còn trống'; data = allBeds.filter(b => b.status === 'available'); break;
                     case 'expiring': title = 'Hợp đồng sắp hết hạn'; data = expiringContracts; break;
@@ -279,9 +432,21 @@
                 <>
                     <div className="p-4 md:p-8 space-y-8">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <StatCard title="Tổng số giường" value={stats.totalBeds} subtext="Trên toàn hệ thống" colorClass="bg-blue-500" onClick={() => handleStatCardClick('total')} />
-                            <StatCard title="Giường đã thuê" value={stats.occupiedBeds} subtext={`${stats.occupancyRate}% lấp đầy`} colorClass="bg-green-500" onClick={() => handleStatCardClick('occupied')} />
+                            <StatCard title="Tổng Quan Hệ Thống" colorClass="bg-purple-500">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-lg font-semibold">Số nhà</p>
+                                        <p className="text-4xl font-bold">{stats.totalBuildings}</p>
+                                    </div>
+                                    <div className="border-l-2 border-purple-400 h-16 mx-4"></div>
+                                    <div>
+                                        <p className="text-lg font-semibold">Số giường</p>
+                                        <p className="text-4xl font-bold">{stats.totalBeds}</p>
+                                    </div>
+                                </div>
+                            </StatCard>
                             <StatCard title="Giường còn trống" value={stats.availableBeds} subtext="Sẵn sàng cho thuê" colorClass="bg-yellow-500" onClick={() => handleStatCardClick('available')} />
+                            <StatCard title="Giường đã thuê" value={stats.occupiedBeds} subtext={`${stats.totalBeds > 0 ? ((stats.occupiedBeds / stats.totalBeds) * 100).toFixed(1) : 0}% lấp đầy`} colorClass="bg-green-500" onClick={() => handleStatCardClick('occupied')} />
                             <StatCard title="Hợp đồng sắp hết hạn" value={expiringContracts.length} subtext="Trong 30 ngày tới" colorClass="bg-red-500" onClick={() => handleStatCardClick('expiring')} />
                         </div>
                         <div className="bg-white p-6 rounded-lg shadow">
@@ -298,8 +463,6 @@
                         title={bottomSheet.title} 
                         data={bottomSheet.data} 
                         type={bottomSheet.type} 
-                        buildings={buildingsData} 
-                        tenants={tenants}
                         onOpenContractModal={(bed) => {
                             onOpenContractModal(bed);
                             setBottomSheet({ ...bottomSheet, show: false });
@@ -402,7 +565,7 @@
         };
 
         const FinanceManagement = ({ buildingsData, expensesData, paymentsData, tenantsData, onAddExpense, onDeleteExpense }) => {
-            const expenseCategories = ["Tiền điện", "Tiền nước", "Tiền Internet", "Sửa chữa", "Phí vệ sinh", "Khác"];
+            const expenseCategories = ["Tiền thuê nhà", "Tiền điện", "Tiền nước", "Tiền Internet", "Sửa chữa", "Phí vệ sinh", "Khác"];
             const [newExpense, setNewExpense] = useState({ 
                 category: expenseCategories[0], 
                 description: '', 
@@ -410,6 +573,7 @@
                 buildingId: '', 
                 date: new Date().toISOString().slice(0, 10) 
             });
+            const [filter, setFilter] = useState({ buildingId: 'all', startDate: '', endDate: '' });
 
             const handleAddExpense = (e) => {
                 e.preventDefault();
@@ -429,40 +593,130 @@
                 setNewExpense({ category: expenseCategories[0], description: '', amount: '', buildingId: '', date: new Date().toISOString().slice(0, 10) });
             };
 
-            const financialSummary = useMemo(() => {
-                const totalRevenue = paymentsData.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
-                const totalExpense = expensesData.reduce((sum, e) => sum + e.amount, 0);
-                return { totalRevenue, totalExpense };
-            }, [paymentsData, expensesData]);
-            
-            const transactions = useMemo(() => {
-                const combined = [
-                    ...paymentsData.filter(p => p.status === 'paid').map(p => ({ ...p, type: 'revenue', date: p.dueDate || p.startDate })),
-                    ...expensesData.map(e => ({...e, type: 'expense'}))
-                ];
-                return combined.sort((a, b) => b.date.toDate() - a.date.toDate());
-            }, [paymentsData, expensesData]);
+            const filteredFinancials = useMemo(() => {
+                let filteredPayments = paymentsData.filter(p => p.status === 'paid');
+                let filteredExpenses = [...expensesData];
 
+                // Filter by Building
+                if (filter.buildingId !== 'all') {
+                    filteredPayments = filteredPayments.filter(p => p.buildingId === filter.buildingId);
+                    filteredExpenses = filteredExpenses.filter(e => e.buildingId === filter.buildingId);
+                }
+
+                // Filter by Date
+                const start = filter.startDate ? new Date(filter.startDate) : null;
+                const end = filter.endDate ? new Date(filter.endDate) : null;
+                if(start) start.setHours(0,0,0,0);
+                if(end) end.setHours(23,59,59,999);
+
+                if (start) {
+                    filteredPayments = filteredPayments.filter(p => p.dueDate.toDate() >= start);
+                    filteredExpenses = filteredExpenses.filter(e => e.date.toDate() >= start);
+                }
+                if (end) {
+                    filteredPayments = filteredPayments.filter(p => p.dueDate.toDate() <= end);
+                    filteredExpenses = filteredExpenses.filter(e => e.date.toDate() <= end);
+                }
+
+                const totalRevenue = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
+                const totalExpense = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+                
+                const combined = [
+                    ...filteredPayments.map(p => ({ ...p, type: 'revenue', date: p.dueDate || p.startDate })),
+                    ...filteredExpenses.map(e => ({...e, type: 'expense'}))
+                ];
+                const transactions = combined.sort((a, b) => b.date.toDate() - a.date.toDate());
+
+                return { totalRevenue, totalExpense, transactions };
+
+            }, [paymentsData, expensesData, filter]);
+            
+            const chartData = useMemo(() => {
+                const monthlyData = {}; 
+                const categoryData = {};
+
+                filteredFinancials.transactions.forEach(t => {
+                    const month = t.date.toDate().toISOString().slice(0, 7);
+                    if (!monthlyData[month]) {
+                        monthlyData[month] = { revenue: 0, expense: 0 };
+                    }
+                    if (t.type === 'revenue') {
+                        monthlyData[month].revenue += t.amount;
+                    } else {
+                        monthlyData[month].expense += t.amount;
+                        const category = t.category === 'Khác' && t.description ? t.description : t.category;
+                        categoryData[category] = (categoryData[category] || 0) + t.amount;
+                    }
+                });
+
+                const sortedMonths = Object.keys(monthlyData).sort();
+                const columnChartLabels = sortedMonths.map(m => `Tháng ${parseInt(m.slice(5), 10)}/${m.slice(0, 4)}`);
+                const revenueData = sortedMonths.map(m => monthlyData[m].revenue);
+                const expenseData = sortedMonths.map(m => monthlyData[m].expense);
+
+                const pieChartLabels = Object.keys(categoryData);
+                const pieChartData = Object.values(categoryData);
+
+                return {
+                    column: { labels: columnChartLabels, revenueData, expenseData },
+                    pie: { labels: pieChartLabels, data: pieChartData }
+                };
+            }, [filteredFinancials]);
 
             return (
                 <div className="p-4 md:p-8 space-y-8">
                     <h2 className="text-2xl font-bold text-gray-800">Quản Lý Tài Chính</h2>
                     
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-xl font-semibold mb-4">Bộ lọc Báo cáo</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Tòa nhà</label>
+                                <select value={filter.buildingId} onChange={e => setFilter({...filter, buildingId: e.target.value})} className="input-form mt-1">
+                                    <option value="all">Tất cả các nhà</option>
+                                    {buildingsData.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="lg:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700">Khoảng thời gian</label>
+                                <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                                    <input type="date" value={filter.startDate} onChange={e => setFilter({...filter, startDate: e.target.value})} className="input-form"/>
+                                    <input type="date" value={filter.endDate} onChange={e => setFilter({...filter, endDate: e.target.value})} className="input-form"/>
+                                    <button onClick={() => setFilter({ buildingId: 'all', startDate: '', endDate: '' })} className="btn-secondary whitespace-nowrap">Xóa Lọc</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="p-6 rounded-lg shadow-lg text-white bg-green-500">
                             <p className="text-lg font-semibold">Tổng Doanh Thu</p>
-                            <p className="text-4xl font-bold">{formatCurrency(financialSummary.totalRevenue)} VNĐ</p>
-                            <p className="text-sm opacity-80">Từ các khoản đã thanh toán</p>
+                            <p className="text-4xl font-bold">{formatCurrency(filteredFinancials.totalRevenue)} VNĐ</p>
+                            <p className="text-sm opacity-80">Trong khoảng thời gian đã lọc</p>
                         </div>
                         <div className="p-6 rounded-lg shadow-lg text-white bg-red-500">
                             <p className="text-lg font-semibold">Tổng Chi Phí</p>
-                            <p className="text-4xl font-bold">{formatCurrency(financialSummary.totalExpense)} VNĐ</p>
-                            <p className="text-sm opacity-80">Các chi phí vận hành</p>
+                            <p className="text-4xl font-bold">{formatCurrency(filteredFinancials.totalExpense)} VNĐ</p>
+                            <p className="text-sm opacity-80">Trong khoảng thời gian đã lọc</p>
                         </div>
                         <div className="p-6 rounded-lg shadow-lg text-white bg-blue-500">
                             <p className="text-lg font-semibold">Lợi Nhuận Ước Tính</p>
-                            <p className="text-4xl font-bold">{formatCurrency(financialSummary.totalRevenue - financialSummary.totalExpense)} VNĐ</p>
+                            <p className="text-4xl font-bold">{formatCurrency(filteredFinancials.totalRevenue - filteredFinancials.totalExpense)} VNĐ</p>
                             <p className="text-sm opacity-80">Doanh thu - Chi phí</p>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-xl font-semibold mb-4">Biểu đồ Phân tích</h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                                <h4 className="text-lg font-semibold text-center mb-2">Doanh thu vs. Chi phí</h4>
+                                <FinanceColumnChart chartData={chartData.column} />
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-semibold text-center mb-2">Cơ cấu Chi phí</h4>
+                                <ExpensePieChart chartData={chartData.pie} />
+                            </div>
                         </div>
                     </div>
 
@@ -506,7 +760,7 @@
                         <h3 className="text-xl font-semibold mb-4">Lịch Sử Giao Dịch</h3>
                         <div className="max-h-96 overflow-y-auto">
                             <ul className="space-y-2">
-                                {transactions.map(item => (
+                                {filteredFinancials.transactions.map(item => (
                                     <li key={item.id} className={`group p-3 rounded-lg flex justify-between items-center ${item.type === 'revenue' ? 'bg-green-50' : 'bg-red-50'}`}>
                                         <div>
                                             <p className="font-bold">{item.type === 'revenue' ? `Thu từ ${tenantsData.find(t => t.id === item.tenantId)?.name || 'N/A'}` : (item.category === 'Khác' ? item.description : item.category)}</p>
@@ -522,7 +776,7 @@
                                         </div>
                                     </li>
                                 ))}
-                                {transactions.length === 0 && <p className="text-gray-500 text-center py-4">Chưa có giao dịch nào.</p>}
+                                {filteredFinancials.transactions.length === 0 && <p className="text-gray-500 text-center py-4">Chưa có giao dịch nào.</p>}
                             </ul>
                         </div>
                     </div>
@@ -551,11 +805,16 @@
 
             return (
                 <li onClick={onClick} className={`group p-2 rounded cursor-pointer transition-all flex justify-between items-center ${isSelected ? 'bg-blue-500 text-white shadow-lg' : 'bg-gray-100 hover:bg-blue-100'}`}>
-                    {isEditing ? (
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} autoFocus className="input-form text-black p-1 flex-grow"/>
-                    ) : (
-                        <span className="flex-grow">{item.name}</span>
-                    )}
+                    <div className="flex items-center flex-grow">
+                        {isEditing ? (
+                            <input type="text" value={name} onChange={e => setName(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} autoFocus className="input-form text-black p-1 flex-grow"/>
+                        ) : (
+                            <span className="flex-grow">{item.name}</span>
+                        )}
+                        {item.isWholeUnit && (
+                            <span title="Cho thuê nguyên căn" className="ml-2 text-gray-500">🏢</span>
+                        )}
+                    </div>
                     <div className="hidden group-hover:flex items-center gap-2 pl-2">
                         <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="text-sm text-blue-600 hover:text-blue-800">Sửa</button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(item); }} className="text-sm text-red-600 hover:text-red-800">Xóa</button>
@@ -575,6 +834,7 @@
         }) => {
             const [selectedBuilding, setSelectedBuilding] = useState(null);
             const [selectedRoom, setSelectedRoom] = useState(null);
+            const [newRoomIsWholeUnit, setNewRoomIsWholeUnit] = useState(false);
             
             const useSubCollection = (parentCollection, parentId, subCollectionName) => {
                 const [data, setData] = useState([]);
@@ -583,7 +843,13 @@
                     const q = db.collection(parentCollection).doc(parentId).collection(subCollectionName);
                     const unsubscribe = q.onSnapshot((querySnapshot) => {
                         const items = [];
-                        querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                        querySnapshot.forEach((doc) => {
+                            items.push({ 
+                                id: doc.id, 
+                                ...doc.data(),
+                                path: doc.ref.path
+                            });
+                        });
                         setData(items);
                     });
                     return () => unsubscribe();
@@ -595,7 +861,7 @@
             const [bedsData, setBedsData] = useState([]);
 
             useEffect(() => {
-                if (!selectedRoom?.id || !selectedBuilding?.id) {
+                if (!selectedRoom?.id || !selectedBuilding?.id || selectedRoom.isWholeUnit) {
                     setBedsData([]);
                     return;
                 }
@@ -620,6 +886,12 @@
                 return () => unsubscribe();
             }, [selectedRoom, selectedBuilding]);
 
+            const handleAddRoomInternal = (e) => {
+                e.preventDefault();
+                onAddRoom(e, selectedBuilding.id, newRoomIsWholeUnit);
+                setNewRoomIsWholeUnit(false);
+            };
+
             const handleAddBedInternal = (e) => { e.preventDefault(); if(!selectedRoom || !selectedBuilding) return; onAddBed(e, selectedRoom.id, selectedBuilding.id, selectedBuilding.name, selectedRoom.name); }
 
             return (
@@ -636,18 +908,46 @@
                                 <div>
                                     <h3 className="font-bold text-lg mb-2">2. Phòng</h3>
                                     {selectedBuilding && (<>
-                                        <form onSubmit={(e) => onAddRoom(e, selectedBuilding.id)} className="flex gap-2 mb-4"><input type="text" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="Tên phòng mới" className="input-form flex-grow"/><button type="submit" className="btn-primary">+</button></form>
-                                        <ul className="space-y-2">{roomsData.map(r => (<EditableListItem key={r.id} item={r} onUpdate={(id, name) => onUpdateItem(`buildings/${selectedBuilding.id}/rooms`, id, name)} onDelete={(item) => onDeleteItem('room', item, selectedBuilding.id)} isSelected={selectedRoom?.id === r.id} onClick={() => setSelectedRoom(r)} />))}</ul>
+                                        <form onSubmit={handleAddRoomInternal} className="mb-4">
+                                            <div className="flex gap-2">
+                                                <input type="text" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="Tên phòng mới" className="input-form flex-grow"/>
+                                                <button type="submit" className="btn-primary">+</button>
+                                            </div>
+                                            <div className="flex items-center mt-2">
+                                                <input id="is-whole-unit" type="checkbox" checked={newRoomIsWholeUnit} onChange={e => setNewRoomIsWholeUnit(e.target.checked)} className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" />
+                                                <label htmlFor="is-whole-unit" className="ml-2 block text-sm text-gray-900">Cho thuê nguyên căn?</label>
+                                            </div>
+                                        </form>
+                                        <ul className="space-y-2">{roomsData.map(r => (
+                                            <EditableListItem key={r.id} item={r} onUpdate={(id, name) => onUpdateItem(`buildings/${selectedBuilding.id}/rooms`, id, name)} onDelete={(item) => onDeleteItem('room', item, selectedBuilding.id)} isSelected={selectedRoom?.id === r.id} onClick={() => setSelectedRoom(r)}>
+                                                {r.isWholeUnit && r.status !== 'occupied' && 
+                                                    <button onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        onOpenContractModal({
+                                                            ...r,
+                                                            buildingId: selectedBuilding.id,
+                                                            buildingName: selectedBuilding.name
+                                                        }); 
+                                                    }} className="btn-secondary text-xs ml-auto">Tạo HĐ</button>
+                                                }
+                                                {r.isWholeUnit && r.status === 'occupied' && <span className="text-xs font-semibold text-red-700 ml-auto">Đã thuê</span>}
+                                            </EditableListItem>
+                                        ))}</ul>
                                     </>)}
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-lg mb-2">3. Giường</h3>
-                                    {selectedRoom && (<>
+                                    {selectedRoom && !selectedRoom.isWholeUnit && (<>
                                         <form onSubmit={handleAddBedInternal} className="flex gap-2 mb-4"><input type="text" value={newBedName} onChange={e => setNewBedName(e.target.value)} placeholder="Tên giường mới" className="input-form flex-grow"/><button type="submit" className="btn-primary">+</button></form>
-                                        <ul className="space-y-2">{bedsData.map(bed => (<EditableListItem key={bed.id} item={bed} onUpdate={(id, name) => onUpdateItem(`buildings/${selectedBuilding.id}/rooms/${selectedRoom.id}/beds`, id, name)} onDelete={(item) => onDeleteItem('bed', item, { buildingId: selectedBuilding.id, roomId: selectedRoom.id })}>
+                                        <ul className="space-y-2">{bedsData.map(bed => (<EditableListItem key={bed.id} item={bed} onUpdate={(id, name) => onUpdateItem(bed.path, id, name)} onDelete={(item) => onDeleteItem('bed', item, { buildingId: selectedBuilding.id, roomId: selectedRoom.id })}>
                                             {bed.status === 'available' ? <button onClick={(e) => { e.stopPropagation(); onOpenContractModal(bed); }} className="btn-secondary text-xs ml-auto">Tạo HĐ</button> : <span className="text-xs font-semibold text-red-700 ml-auto">Đã thuê</span>}
                                         </EditableListItem>))}</ul>
                                     </>)}
+                                    {selectedRoom && selectedRoom.isWholeUnit && (
+                                        <div className="p-4 bg-gray-100 rounded-lg text-center text-gray-600">
+                                            Phòng này được cho thuê nguyên căn.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -886,7 +1186,19 @@
             };
 
             const handleAddBuilding = async (e) => { e.preventDefault(); if (newBuildingName.trim() === '') return; await db.collection('buildings').add({ name: newBuildingName, createdAt: Timestamp.now() }); setNewBuildingName(''); };
-            const handleAddRoom = async (e, buildingId) => { e.preventDefault(); if (newRoomName.trim() === '' || !buildingId) return; await db.collection('buildings').doc(buildingId).collection('rooms').add({ name: newRoomName, createdAt: Timestamp.now() }); setNewRoomName(''); };
+            
+            const handleAddRoom = async (e, buildingId, isWholeUnit) => { 
+                e.preventDefault(); 
+                if (newRoomName.trim() === '' || !buildingId) return; 
+                await db.collection('buildings').doc(buildingId).collection('rooms').add({ 
+                    name: newRoomName, 
+                    isWholeUnit: isWholeUnit,
+                    status: 'available',
+                    createdAt: Timestamp.now() 
+                }); 
+                setNewRoomName(''); 
+            };
+            
             const handleAddBed = async (e, roomId, buildingId, buildingName, roomName) => { e.preventDefault(); if (newBedName.trim() === '' || !roomId || !buildingId) return; await db.collection('buildings').doc(buildingId).collection('rooms').doc(roomId).collection('beds').add({ name: newBedName, status: 'available', tenantId: null, createdAt: Timestamp.now(), buildingId, roomId, buildingName, roomName }); setNewBedName(''); };
             
             const handleAddTenant = async (tenantData) => { 
@@ -909,21 +1221,30 @@
             };
 
             const handleCreateContract = async (contractDataPayload) => { 
-                if(!contractDataPayload.tenantId || !contractDataPayload.bedId) { 
+                if(!contractDataPayload.tenantId || !contractDataPayload.itemId) { 
                     alert("Vui lòng chọn người thuê!"); 
                     return; 
                 } 
-                if(!contractDataPayload.bedPath) {
-                    alert("Lỗi: Không tìm thấy đường dẫn của giường. Không thể cập nhật trạng thái.");
+                if(!contractDataPayload.itemPath) {
+                    alert("Lỗi: Không tìm thấy đường dẫn của phòng/giường. Không thể cập nhật trạng thái.");
                     return;
                 }
                 try { 
                     const contractRef = await db.collection('contracts').add({ ...contractDataPayload, startDate: Timestamp.now() }); 
                     const amount = parseInt(contractDataPayload.rentPrice) * parseInt(contractDataPayload.paymentCycle); 
-                    await db.collection('payments').add({ contractId: contractRef.id, tenantId: contractDataPayload.tenantId, amount: amount, dueDate: Timestamp.now(), status: 'unpaid' }); 
+                    await db.collection('payments').add({ 
+                        contractId: contractRef.id, 
+                        tenantId: contractDataPayload.tenantId, 
+                        amount: amount, 
+                        dueDate: Timestamp.now(), 
+                        status: 'unpaid',
+                        buildingId: contractDataPayload.buildingId,
+                        buildingName: contractDataPayload.buildingName,
+                        roomName: contractDataPayload.roomName
+                    }); 
                     
-                    const bedRef = db.doc(contractDataPayload.bedPath); 
-                    await bedRef.update({ status: 'occupied', tenantId: contractDataPayload.tenantId }); 
+                    const itemRef = db.doc(contractDataPayload.itemPath); 
+                    await itemRef.update({ status: 'occupied', tenantId: contractDataPayload.tenantId }); 
                     
                     setShowContractModal(false);
                     setContractData({ bedId: null, tenantId: '', paymentCycle: '3', rentPrice: '2000000' });
@@ -936,32 +1257,34 @@
             const handleUpdatePaymentStatus = async (paymentId, newStatus) => { const paymentRef = db.collection('payments').doc(paymentId); await paymentRef.update({ status: newStatus }); };
             const handleLogout = () => { auth.signOut(); };
 
-            const handleOpenContractModal = (bed) => {
-                const bedForContract = { ...bed };
+            const handleOpenContractModal = (item) => {
+                const isRoom = !!item.isWholeUnit;
+                const itemForContract = { ...item };
 
-                if (!bedForContract.buildingId && bedForContract.buildingName) {
-                    const building = buildingsData.find(b => b.name === bedForContract.buildingName);
+                if (!itemForContract.buildingId && itemForContract.buildingName) {
+                    const building = buildingsData.find(b => b.name === itemForContract.buildingName);
                     if (building) {
-                        bedForContract.buildingId = building.id;
+                        itemForContract.buildingId = building.id;
                     }
                 }
                 
-                if (!bedForContract.id || !bedForContract.path) {
-                    alert('Thông tin giường không đầy đủ để tạo hợp đồng. Thiếu ID hoặc đường dẫn.');
-                    console.error('Invalid bed data for contract:', bedForContract);
+                if (!itemForContract.id || !itemForContract.path) {
+                    alert('Thông tin phòng/giường không đầy đủ để tạo hợp đồng. Thiếu ID hoặc đường dẫn.');
+                    console.error('Invalid item data for contract:', itemForContract);
                     return;
                 }
 
                 setContractData({
-                    bedId: bedForContract.id,
-                    roomId: bedForContract.roomId,
-                    buildingId: bedForContract.buildingId,
-                    buildingName: bedForContract.buildingName,
-                    roomName: bedForContract.roomName,
+                    itemId: itemForContract.id,
+                    itemType: isRoom ? 'room' : 'bed',
+                    roomId: isRoom ? itemForContract.id : itemForContract.roomId,
+                    buildingId: itemForContract.buildingId,
+                    buildingName: itemForContract.buildingName,
+                    roomName: isRoom ? itemForContract.name : itemForContract.roomName,
                     tenantId: '',
                     paymentCycle: '3',
-                    rentPrice: '2000000',
-                    bedPath: bedForContract.path
+                    rentPrice: isRoom ? '15000000' : '2000000',
+                    itemPath: itemForContract.path
                 });
                 setShowContractModal(true);
             };
@@ -977,8 +1300,8 @@
             };
 
             const handleGenerateContractText = async () => {
-                if (!contractData.tenantId || !contractData.bedId) {
-                    alert("Vui lòng chọn người thuê và giường trước khi soạn thảo.");
+                if (!contractData.tenantId || !contractData.itemId) {
+                    alert("Vui lòng chọn người thuê và phòng/giường trước khi soạn thảo.");
                     return;
                 }
                 setIsGenerating(true);
@@ -986,12 +1309,13 @@
                 setCopySuccess('');
 
                 const tenant = tenantsData.find(t => t.id === contractData.tenantId);
+                const itemName = contractData.itemType === 'room' ? contractData.roomName : allBedsData.find(b => b.id === contractData.itemId)?.name;
                 
                 const prompt = `
                     Hãy soạn thảo các điều khoản hợp đồng cho thuê nhà đơn giản bằng tiếng Việt cho các thông tin sau:
                     - Tên người thuê: ${tenant?.name}
                     - Số điện thoại: ${tenant?.phone}
-                    - Tên giường: ${allBedsData.find(b => b.id === contractData.bedId)?.name}
+                    - Đối tượng thuê: ${contractData.itemType === 'room' ? `Phòng ${itemName}` : `Giường ${itemName}`}
                     - Thuộc phòng: ${contractData.roomName}
                     - Tại nhà: ${contractData.buildingName}
                     - Giá thuê hàng tháng: ${formatCurrency(contractData.rentPrice)} VNĐ
@@ -1000,14 +1324,13 @@
 
                     Nội dung cần bao gồm các mục chính sau:
                     1. Thông tin các bên.
-                    2. Đối tượng hợp đồng (giường, phòng, nhà).
+                    2. Đối tượng hợp đồng.
                     3. Giá thuê và phương thức thanh toán.
-                    4. Thời hạn hợp đồng (để trống hoặc ghi là theo kỳ thanh toán).
-                    5. Quyền và nghĩa vụ của người thuê (giữ gìn vệ sinh chung, bảo quản tài sản, không gây mất trật tự).
-                    6. Quyền và nghĩa vụ của bên cho thuê.
-                    7. Điều khoản chung và chữ ký các bên.
+                    4. Thời hạn hợp đồng.
+                    5. Quyền và nghĩa vụ của các bên.
+                    6. Điều khoản chung và chữ ký.
 
-                    Vui lòng trình bày rõ ràng, chuyên nghiệp và dễ hiểu dưới dạng văn bản thuần túy.
+                    Vui lòng trình bày rõ ràng, chuyên nghiệp và dễ hiểu.
                 `;
 
                 try {
@@ -1076,7 +1399,7 @@
                         onOpenAddTenantModal={handleOpenAddTenantModal}
                     />
                     <main>
-                        {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenContractModal={handleOpenContractModal} onOpenAddTenantModal={handleOpenAddTenantModal} />}
+                        {view === 'dashboard' && <Dashboard allBeds={allBedsData} tenants={tenantsData} contracts={contractsData} payments={paymentsData} buildingsData={buildingsData} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenContractModal={handleOpenContractModal} />}
                         {view === 'finance' && <FinanceManagement tenantsData={tenantsData} buildingsData={buildingsData} expensesData={expensesData} paymentsData={paymentsData} onAddExpense={handleAddExpense} onDeleteExpense={handleDeleteExpense} />}
                         {view === 'directory' && <TenantDirectory allBeds={allBedsData} tenantsData={tenantsData} buildingsData={buildingsData} />}
                         {view === 'management' && <Management onAddBuilding={handleAddBuilding} onAddRoom={handleAddRoom} onAddBed={handleAddBed} onOpenAddTenantModal={handleOpenAddTenantModal} onOpenContractModal={handleOpenContractModal} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} onUpdateTenant={handleUpdateTenant} onDeletePayment={handleDeletePayment} onOpenEditTenantModal={handleOpenEditTenantModal} newBuildingName={newBuildingName} setNewBuildingName={setNewBuildingName} newRoomName={newRoomName} setNewRoomName={setNewRoomName} newBedName={newBedName} setNewBedName={setNewBedName} buildingsData={buildingsData} tenantsData={tenantsData} paymentsData={paymentsData}/>}
